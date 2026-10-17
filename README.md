@@ -33,6 +33,8 @@ A PXLPSHR project.
 - **Audio out:** export the mix or stems (one WAV per track, zipped) faster than real time, or record live.
 - **Files:** save named tunes in the browser; open and download them as `.js`, or as a `.zip` with the
   tune and the imported samples it uses; start a new empty tune. The code's first line is its title (`// name`).
+  A tune opened from a link, a file or a zip is code someone else wrote: it doesn't run until you press play
+  (or ctrl+enter), so tracks written in plain code show their steps from then on.
 - **Demos:** file → demos… opens **stab - pxlpshr** (the tune a first visit opens) and the tunes in `demos/`.
   **visuals demo** uses every visual Strudel draws inside the code: `_scope`, `_punchcard`, `_spiral`,
   `_pianoroll`, `_pitchwheel`, `_spectrum` and `markcss`.

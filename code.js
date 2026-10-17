@@ -676,6 +676,53 @@ export function setTrackPump(tune, t, depth) {
   if (lists.attack || !orbits.length) write('attack', orbits.length ? attacks : null);
 }
 
+// The code to open on strudel.cc: the duck lists keep only the orbits a
+// playing track uses. Strudel logs an error for every duck of an orbit that
+// nothing has played on yet (here a muted track's orbit), while StrudelUI's own
+// lists keep those entries so a track's pump survives a mute. Unchanged when
+// an orbit can't be read (a code track's .orbit() as a pattern) or the code
+// doesn't regenerate exactly.
+export function forStrudel(code) {
+  const tune = parse(code);
+  const source = duckSource(tune);
+  if (!source || generate(tune) !== code) return code;
+  const lists = Object.fromEntries(DUCK.map((k) => [k, duckList(source, k)]));
+  if (!lists.orbit || DUCK.some((k) => Number.isNaN(lists[k]))) return code;
+  const byId = new Map(tune.tracks.map((t) => [t.id, t]));
+  let playing;
+  if (tune.mode === 'song' && tune.song) {
+    const scenes = new Map(tune.scenes.map((s) => [s.id, s.ids]));
+    playing = [...new Set(tune.song.entries.flatMap((e) => scenes.get(e.scene) ?? []))].map((id) => byId.get(id)).filter(Boolean);
+  } else {
+    const solos = tune.tracks.filter((t) => t.solo);
+    playing = solos.length ? solos : tune.tracks.filter((t) => !t.mute);
+  }
+  const used = new Set();
+  for (const t of playing) {
+    if (t.kind !== 'code') {
+      const o = orbitOf(t);
+      if (o == null) return code;
+      used.add(o);
+      continue;
+    }
+    const calls = t.raw.match(/\.orbit\(/g)?.length ?? 0;
+    const nums = [...t.raw.matchAll(/\.orbit\(\s*(\d+)\s*\)/g)].map((m) => Number(m[1]));
+    if (nums.length !== calls) return code;
+    (calls ? nums : [1]).forEach((o) => used.add(o));
+  }
+  const n = lists.orbit.length;
+  const keep = lists.orbit.map((o) => used.has(o));
+  if (keep.every(Boolean)) return code;
+  // a shorter list repeats its last value: spell it out before dropping entries
+  const full = (list) => list && Array.from({ length: n }, (_, j) => list[j] ?? list.at(-1)).filter((_, j) => keep[j]);
+  const orbits = lists.orbit.filter((_, j) => keep[j]);
+  for (const k of DUCK) {
+    const list = k === 'orbit' ? orbits : full(lists[k]);
+    if (lists[k] || k === 'orbit') setLine(source, `.duck${k}(`, orbits.length && list ? `.duck${k}("${list.map(num).join(':')}")` : null);
+  }
+  return generate(tune);
+}
+
 // Pump on / off for one track, at the pump's main depth (the header's
 // amount). A track sharing its orbit first moves to an orbit of its own, so
 // the switch changes this track only (and its room stops being shared).

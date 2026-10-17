@@ -701,6 +701,40 @@ try {
     return `${r.before} widgets, ${r.during} during the drag`;
   });
 
+  await check("a tune from a link waits for play: opening (or reloading) doesn't run its code", async () => {
+    const appReady = `document.querySelector('#play')?.textContent.includes('play') && document.querySelector('#kit')?.options.length > 10`;
+    // a code-only track (shown by running the code) and a line that leaves a mark when it runs
+    const tune = '// review link\nglobalThis.reviewRan = (globalThis.reviewRan ?? 0) + 1\nsetcpm(120/4)\n\nconst chirp = s("bd*4").every(2, (x) => x.fast(2))\n\nstack(\n  chirp,\n)\n';
+    const link = `${base}/index.html#code=${encodeURIComponent(Buffer.from(tune).toString('base64'))}`;
+    let r;
+    try {
+      await open(link, appReady);
+      await new Promise((res) => setTimeout(res, 1500));
+      const opened = await page(`return { ran: globalThis.reviewRan ?? 0, loaded: document.querySelector('strudel-editor').editor.code.startsWith('// review link'), status: document.querySelector('#status').textContent }`);
+      await open(`${base}/index.html`, appReady); // a reload: the held tune is the autosave now
+      await new Promise((res) => setTimeout(res, 1500));
+      const reloaded = await page(`return { ran: globalThis.reviewRan ?? 0, loaded: document.querySelector('strudel-editor').editor.code.startsWith('// review link') }`);
+      const played = await page(`
+        document.querySelector('#play').click();
+        await new Promise((r) => setTimeout(r, 1500));
+        const ran = globalThis.reviewRan ?? 0;
+        document.querySelector('#play').click();
+        await new Promise((r) => setTimeout(r, 300));
+        return { ran, held: JSON.parse(localStorage.getItem('beats-ui-v2'))?.held ?? false };`);
+      r = { opened, reloaded, played };
+    } finally {
+      await page(`localStorage.clear(); return true`).catch(() => {});
+      await open(`${base}/index.html`, appReady);
+    }
+    if (!r.opened.loaded) throw new Error("the link's tune didn't load");
+    if (r.opened.ran) throw new Error('opening the link ran its code');
+    if (!/runs when you press play/.test(r.opened.status)) throw new Error(`no hint in the status: ${r.opened.status}`);
+    if (!r.reloaded.loaded || r.reloaded.ran) throw new Error(`after a reload: loaded ${r.reloaded.loaded}, ran ${r.reloaded.ran}`);
+    if (r.played.ran < 1) throw new Error("play didn't run the code");
+    if (r.played.held) throw new Error('still held after play');
+    return 'held through open and reload, runs on play';
+  });
+
   // ── the learn page ──
   await check('every learn-page example evaluates', async () => {
     await open(`${base}/learn.html`, `document.querySelectorAll('.ex-box').length > 0`);

@@ -3,7 +3,7 @@ import {
   STEPS, IDENT, MAX_BARS, parse, generate, audible, references, declared, getParam, setParam, hasLine, setLine, getPump, setPump, getSound, setSound,
   getTrackPump, pumpTrack,
   blockToTrack, addTrack, duplicateTrack, removeTrack, renameTrack, setBars, allIds, setMode,
-  addScene, removeScene, addSongEntry, songLength, toMidi, fromMidi, num, freeOrbit, soundsIn, renameSounds, setTrim,
+  addScene, removeScene, addSongEntry, songLength, toMidi, fromMidi, num, freeOrbit, soundsIn, renameSounds, forStrudel, setTrim,
 } from './code.js';
 import { DEFAULT_TUNE, DEFAULT_NAME } from './default.js';
 import { loadBankNames, loadUserSamples, userSoundNames, userSoundFiles, deleteAllUserSamples, catalog, banks, bankName, hasSound, isSample, countOf, audition, addFiles, tuneSamples, reassertUserSounds, filesFromDrop } from './sounds.js';
@@ -44,6 +44,10 @@ let parsedCode = code; // what `tune` was parsed from
 let tune = parse(code);
 let tuneName = saved.name ?? 'untitled';
 let savedAs = saved.savedAs ?? null; // the named save this tune came from: cmd+s only overwrites that one
+// A tune from outside (a link, a file, a zip) is held: shown, but its code
+// doesn't run until play, ctrl+enter, export or record (like strudel.cc's
+// links), so opening one can't run its JavaScript. Kept in the autosave.
+let held = !!saved.held;
 
 let saveTimer;
 let storageWarned = false;
@@ -53,7 +57,7 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      localStorage.setItem(STORE, JSON.stringify({ code, name: tuneName, savedAs }));
+      localStorage.setItem(STORE, JSON.stringify({ code, name: tuneName, savedAs, ...(held && { held }) }));
     } catch {
       if (!storageWarned) status('autosave failed: browser storage is full · download the code to keep it', true);
       storageWarned = true;
@@ -78,6 +82,19 @@ $('#editor').append(host);
 const editor = host.editor;
 applyEditorSettings(editor);
 editor.setFontFamily('ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace');
+// Every evaluate of this editor goes through repl.evaluate (play, ctrl+enter,
+// export, record, and preview, which skips held tunes): one that runs releases
+// a held tune.
+{
+  const evaluate = editor.repl.evaluate;
+  editor.repl.evaluate = (...args) => {
+    if (held) {
+      held = false;
+      save();
+    }
+    return evaluate(...args);
+  };
+}
 // When the code scrolls with the page (layout below, narrow windows), keep the
 // caret out from under the sticky header: CodeMirror's scrollMargins. The
 // bundle doesn't export EditorView or StateEffect, so both come from the view.
@@ -193,7 +210,7 @@ function redo() {
 // Errors stay quiet here: the code may be half-typed.
 let quiet = false;
 async function preview() {
-  if (playing || !tune.tracks.some((t) => t.kind === 'code')) return;
+  if (held || playing || !tune.tracks.some((t) => t.kind === 'code')) return;
   await editor.prebaked;
   quiet = true;
   try {
@@ -504,7 +521,7 @@ async function openTuneFile(file) {
         }
       }
     }
-    loadTune(code, { name: f.name });
+    loadTune(code, { name: f.name, held: true });
     openedStatus(`opened ${f.name}${sounds.length ? ` with its samples (${sounds.join(', ')})` : ''}${notes}`, warn);
   } catch (err) {
     status(`couldn't open ${file.name}: ${err.message ?? err}`, true);
@@ -550,6 +567,8 @@ function loadTune(src, meta = {}) {
   adopt(code);
   tuneName = meta.name ?? tuneName;
   savedAs = meta.savedAs ?? null;
+  held = !!meta.held;
+  if (held && playing) editor.stop();
   page = 0;
   showName();
   save();
@@ -1237,7 +1256,8 @@ const missingSounds = () => [...new Set(tune.tracks.map((t) => t.kind !== 'code'
 function openedStatus(msg, warn = false) {
   const miss = missingSounds();
   const note = miss.length ? ` · not in this browser: ${miss.join(', ')} (+ samples to import)` : '';
-  status(msg + note, warn || miss.length > 0, { label: 'undo', run: undo });
+  const waits = held && tune.tracks.some((t) => t.kind === 'code') ? ' · its code runs when you press play' : '';
+  status(msg + waits + note, warn || miss.length > 0, { label: 'undo', run: undo });
 }
 const soundLabel = (s) => `${s.name}${s.n ? `:${s.n}` : ''}${s.bank ? ` · ${s.bank}` : ''}`;
 
@@ -2122,7 +2142,7 @@ function stopped() {
 // strudel.cc reads a tune from base64 in the URL hash
 $('#open').addEventListener('click', () => {
   let bin = '';
-  for (const byte of new TextEncoder().encode(editor.code)) bin += String.fromCharCode(byte);
+  for (const byte of new TextEncoder().encode(forStrudel(editor.code))) bin += String.fromCharCode(byte);
   window.open(`https://strudel.cc/#${encodeURIComponent(btoa(bin))}`, '_blank', 'noopener');
 });
 $('#copy').addEventListener('click', async () => {
@@ -2244,7 +2264,7 @@ function openFromLink() {
         saveTune(kept, { code });
       } catch {}
     }
-    loadTune(src, { name: 'example' });
+    loadTune(src, { name: 'example', held: true });
     openedStatus(kept ? `opened an example · your tune was saved as "${kept}" (file menu → open saved)` : 'opened an example from the link');
   } catch {
     status("couldn't read the tune in that link", true);

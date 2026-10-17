@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import {
   parse, generate, getParam, setParam, setLine, getPump, setPump, getSound, setSound,
   blockToTrack, addTrack, duplicateTrack, removeTrack, renameTrack, setBars, setMode,
-  addScene, removeScene, addSongEntry, songLength, allIds, references, declared, freeOrbit, getTrackPump, setTrackPump, pumpTrack, orbitOf, setTrim, num, numAt, soundsIn, renameSounds,
+  addScene, removeScene, addSongEntry, songLength, allIds, references, declared, freeOrbit, getTrackPump, setTrackPump, pumpTrack, orbitOf, setTrim, num, numAt, soundsIn, renameSounds, forStrudel,
 } from '../code.js';
 import { clampRange } from '../trim.js';
 import { DEFAULT_TUNE } from '../default.js';
@@ -321,6 +321,21 @@ test('soundsIn finds bank-qualified sounds, through constants, other chains and 
   assert.deepEqual(soundsIn('const h = s("hh").bank(/* c */"kit")\n', ['kit_hh']), ['kit_hh']);
   assert.deepEqual(soundsIn('const kit = "mykit"\nconst h = s("hh").bank(kit)\n', ['mykit_hh']), ['mykit_hh']);
   assert.deepEqual(soundsIn('const a = s("Pack")\n', ['pack']), ['pack']);
+});
+
+test('forStrudel: the duck lists keep only orbits a playing track uses', () => {
+  const lines = (c) => c.split('\n').filter((l) => /\.duck/.test(l)).map((l) => l.trim());
+  // loop: perc, stab and stab2 (orbit 5) are muted, so orbit 5 goes; nothing else changes
+  const out = forStrudel(DEFAULT_TUNE);
+  assert.deepEqual(lines(out), ['.duckorbit("2")', '.duckdepth(".46")', '.duckattack(".01")']);
+  assert.equal(out.split('\n').filter((l, i) => l !== DEFAULT_TUNE.split('\n')[i]).length, 3);
+  // song: the scenes play orbit 5 too, so the lists stay
+  const t = parse(DEFAULT_TUNE);
+  setMode(t, 'song');
+  const song = generate(t);
+  assert.equal(forStrudel(song), song);
+  // every orbit playing: unchanged
+  assert.equal(forStrudel(TUNE), TUNE);
 });
 
 test('freeOrbit: one above every .orbit(n) in code, not in comments or strings', () => {
