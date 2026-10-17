@@ -659,6 +659,48 @@ try {
     return r.names.join(', ');
   });
 
+  await check('dragging a slider keeps the code\'s inline widgets (visuals demo, playing)', async () => {
+    const r = await page(`
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const ed = document.querySelector('strudel-editor').editor;
+      const before = ed.code;
+      const widgets = () => [...document.querySelector('#editor .cm-content').children].filter((c) => !c.classList.contains('cm-line')).length;
+      const out = {};
+      try {
+        document.querySelector('#file').click();
+        await wait(200);
+        [...document.querySelectorAll('.menu .menu-item')].find((b) => b.textContent === 'demos…').click();
+        await wait(200);
+        [...document.querySelectorAll('.menu .menu-item')].find((b) => b.textContent === 'visuals demo').click();
+        await wait(1500);
+        document.querySelector('#play').click();
+        for (let i = 0; i < 40 && widgets() < 6; i++) await wait(100);
+        out.before = widgets();
+        const slider = [...document.querySelectorAll('#rack .row')].find((r) => r.textContent.includes('lead')).querySelectorAll('input[type=range]')[1];
+        const counts = [];
+        for (let i = 0; i < 15; i++) {
+          slider.value = String(Number(slider.value) - (Number(slider.max) - Number(slider.min)) / 60);
+          slider.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(20); // faster than the 60 ms re-evaluate: only the code write runs
+          counts.push(widgets());
+        }
+        out.during = Math.min(...counts);
+        out.changed = ed.code !== before;
+      } finally {
+        if (ed.repl.scheduler.started) document.querySelector('#play').click();
+        await wait(300);
+        for (let i = 0; i < 20 && ed.code !== before; i++) {
+          document.querySelector('#undo').click();
+          await wait(100);
+        }
+      }
+      return out;`);
+    if (!(r.before >= 6)) throw new Error(`only ${r.before} widgets drew`);
+    if (!r.changed) throw new Error("the slider didn't change the code");
+    if (r.during < r.before) throw new Error(`widgets dropped from ${r.before} to ${r.during} during the drag`);
+    return `${r.before} widgets, ${r.during} during the drag`;
+  });
+
   // ── the learn page ──
   await check('every learn-page example evaluates', async () => {
     await open(`${base}/learn.html`, `document.querySelectorAll('.ex-box').length > 0`);

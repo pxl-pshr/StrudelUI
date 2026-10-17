@@ -165,7 +165,7 @@ function restore(snap) {
   code = snap.code;
   tuneName = snap.name;
   savedAs = snap.savedAs;
-  editor.setCode(snap.code);
+  writeCode(snap.code);
   adopt(snap.code);
   showName();
   save();
@@ -202,6 +202,21 @@ async function preview() {
   quiet = false;
 }
 
+// Writes code into the editor, changing only the span that differs: a full
+// replace (StrudelMirror.setCode) drops every inline widget (_scope(),
+// _pianoroll(), …) and playing highlight until the next evaluate, which
+// during a slider drag only comes once the drag pauses.
+function writeCode(next) {
+  const view = editor.editor;
+  const prev = view.state.doc.toString();
+  if (prev === next) return;
+  let from = 0;
+  while (from < prev.length && from < next.length && prev[from] === next[from]) from++;
+  let tail = 0;
+  while (tail < prev.length - from && tail < next.length - from && prev[prev.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+  view.dispatch({ changes: { from, to: prev.length - tail, insert: next.slice(from, next.length - tail) } });
+}
+
 // Every grid edit goes through here: catch up with any typing first,
 // change the tune, write it back as code, and re-evaluate if playing.
 let evalTimer;
@@ -213,7 +228,7 @@ function edit(change, merge = false) {
   if (next !== code) {
     remember(code, merge);
     code = next;
-    editor.setCode(next);
+    writeCode(next);
   }
   save();
   render();
@@ -531,7 +546,7 @@ function loadTune(src, meta = {}) {
   remember(code);
   lastChange = 0;
   code = src.replace(/\r\n?/g, '\n');
-  editor.setCode(code);
+  writeCode(code);
   adopt(code);
   tuneName = meta.name ?? tuneName;
   savedAs = meta.savedAs ?? null;
@@ -584,7 +599,7 @@ function retitle(name) {
   else lines.unshift(head);
   remember(code);
   code = lines.join('\n');
-  editor.setCode(code);
+  writeCode(code);
   adopt(code);
   clearTimeout(evalTimer);
   evalTimer = setTimeout(() => (playing ? editor.repl.evaluate(editor.code) : preview()), 60);
