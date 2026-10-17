@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn · StrudelUI</title>
+<meta name="description" content="Learn to make music with Strudel, one step at a time, with StrudelUI's grid next to the code.">
+<meta name="theme-color" content="#0c0d0f">
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%230c0d0f'/%3E%3Cpath d='M7 4H4v12h3M13 4h3v12h-3' fill='none' stroke='%23c8cbd0' stroke-width='1.8'/%3E%3Crect x='8' y='8' width='4' height='4' rx='.8' fill='%23d6f5a0'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0c0d0f;
+    --panel: #121316;
+    --line: #22242a;
+    --cell: #1a1c20;
+    --cell-beat: #1f2126;
+    --text: #c8cbd0;
+    --dim: #858a93;
+    --accent: #d6f5a0;
+    --accent-ink: #11140c;
+    --err: #ff8a7a;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  :root { --head: 50px; } /* the sticky header's height */
+  html { scroll-padding-top: calc(var(--head) + 20px); }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.65 var(--mono); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { color: var(--accent); }
+  button { font: inherit; color: inherit; }
+
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+    display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line);
+  }
+  .gh { display: inline-flex; color: var(--dim); }
+  .gh:hover, .gh:focus-visible { color: var(--text); }
+  h1 { font-size: 13px; font-weight: 400; margin: 0; display: flex; align-items: center; gap: 8px; }
+  /* the logo: a lit step inside mini-notation brackets, [ x ] */
+  .logo { width: 20px; height: 20px; flex: none; }
+  .logo .br { fill: none; stroke: var(--text); stroke-width: 1.6; }
+  .logo .on { fill: var(--accent); }
+  h1 span { color: var(--dim); font-weight: 400; }
+  .push { margin-left: auto; }
+  .docs { color: var(--dim); font-size: 12px; margin-top: 18px; }
+
+  .page { display: grid; grid-template-columns: 210px minmax(0, 760px); gap: 40px; padding: 28px 20px 80px; }
+  nav { position: sticky; top: calc(var(--head) + 20px); align-self: start; }
+  nav ol { list-style: none; margin: 0; padding: 0; counter-reset: lesson; }
+  nav li { counter-increment: lesson; }
+  nav a { display: block; padding: 3px 0; color: var(--dim); }
+  nav a::before { content: counter(lesson) "  "; color: var(--line); }
+  nav a:hover, nav a.on { color: var(--text); text-decoration: none; }
+  nav a.on::before { color: var(--accent); }
+
+  article section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); }
+  article section:last-child { border-bottom: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  h2 small { color: var(--dim); font-weight: 400; font-size: 12px; }
+  p, ul { margin: 0 0 12px; }
+  ul { padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  .lead { color: var(--dim); }
+  kbd {
+    font: inherit; font-size: 11px; padding: 0 5px; border: 1px solid var(--line); border-radius: 3px; background: var(--cell);
+  }
+
+  /* examples: editable code, play, the grid it makes */
+  pre.ex { white-space: pre-wrap; color: var(--dim); } /* before the script turns it into an example */
+  .ex-box { margin: 14px 0 18px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+  .ex-box.playing { border-color: var(--accent); }
+  .ex-bar { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .ex-play {
+    min-width: 72px; padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    background: var(--cell-beat); border: 1px solid var(--line);
+  }
+  .ex-box.playing .ex-play { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .ex-link { background: none; border: 0; padding: 0; color: var(--dim); cursor: pointer; }
+  .ex-link:hover { color: var(--text); }
+  .ex-play:focus-visible, .ex-link:focus-visible, .ex-code:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .ex-code {
+    display: block; width: 100%; resize: none; overflow: hidden; border: 0; outline: none;
+    padding: 12px; background: transparent; color: var(--text); font: 12px/1.6 var(--mono); tab-size: 2;
+  }
+  .ex-err { color: var(--err); padding: 0 12px 10px; font-size: 12px; }
+  .ex-err:empty { display: none; }
+  .ex-grid { padding: 10px 12px 12px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+  .ex-grid:empty { display: none; }
+  .g-row { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; }
+  .g-name { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .g-steps { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; max-width: 420px; }
+  .g-steps span { height: 18px; border-radius: 2px; background: var(--cell); font-size: 8px; line-height: 18px; text-align: center; color: var(--accent-ink); overflow: hidden; }
+  .g-steps span:nth-child(4n+1) { background: var(--cell-beat); }
+  .g-steps span:nth-child(4n+1):not(:first-child) { margin-left: 3px; }
+  .g-steps span.on { background: var(--accent); }
+  .g-steps span.now { outline: 1px solid var(--dim); }
+  .g-steps span.on.now { background: #fff; }
+  .g-row.muted { opacity: .35; }
+  .g-code { color: var(--dim); font-size: 11px; }
+
+  .note { padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--panel); color: var(--dim); margin: 0 0 12px; }
+  .note b { color: var(--text); font-weight: 600; }
+  pre.note { white-space: pre; overflow-x: auto; font: 11px/1.6 var(--mono); color: var(--text); }
+
+  /* back to top: shown after scrolling past the first lesson */
+  .to-top {
+    position: fixed; right: 20px; bottom: 20px; width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center; cursor: pointer; font-size: 16px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s;
+  }
+  .to-top.shown { opacity: 1; visibility: visible; }
+  .to-top:hover, .to-top:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+  @media (max-width: 760px) {
+    .to-top { right: 16px; bottom: 16px; width: 44px; height: 44px; }
+    .page { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 20px 16px 60px; }
+    header { padding: 12px 16px; }
+    nav { position: static; }
+    nav ol { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .g-row { grid-template-columns: 52px 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><path class="br" d="M6 2.5H2.5v15H6M14 2.5h3.5v15H14"/><rect class="on" x="7.5" y="7.5" width="5" height="5" rx="1"/></svg>strudelui <span>· learn</span></h1>
+  <a class="push" href="https://strudel.cc/learn/" target="_blank" rel="noopener">Strudel docs ↗</a>
+  <a href="index.html">open the app</a>
+  <a class="gh" href="https://github.com/pxl-pshr/StrudelUI" target="_blank" rel="noopener" title="source on GitHub" aria-label="source on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+</header>
+<div class="page">
+  <nav aria-label="lessons">
+    <ol>
+      <li><a href="#start">Getting started</a></li>
+      <li><a href="#steps">Steps and rhythm</a></li>
+      <li><a href="#sounds">Sounds and kits</a></li>
+      <li><a href="#notes">Notes</a></li>
+      <li><a href="#mix">Mix and effects</a></li>
+      <li><a href="#bars">Bars, scenes and songs</a></li>
+      <li><a href="#files">Saving and exporting</a></li>
+      <li><a href="#beyond">Past the grid</a></li>
+    </ol>
+  </nav>
+  <article>
+
+<section id="start">
+  <h2>Getting started</h2>
+  <p class="lead">StrudelUI is a step sequencer for <a href="https://strudel.cc" target="_blank" rel="noopener">Strudel</a>, a language for making music with code. You click steps on a grid, and it writes the Strudel code for you. Change the code, and the grid follows. You never need to type code to make a beat, but you'll learn it by watching.</p>
+  <p>This page covers what the grid does. For the whole language, every function and how to write it by hand, see Strudel's own <a href="https://strudel.cc/learn/" target="_blank" rel="noopener">docs</a> and <a href="https://strudel.cc/workshop/getting-started/" target="_blank" rel="noopener">workshop</a>; each lesson below links the part that goes deeper.</p>
+  <p>Every example on this page is real Strudel code. Press <b>▶ play</b> to hear it (or <kbd>ctrl</kbd>+<kbd>enter</kbd> inside the code), and edit it while it plays: the sound and the little grid under it update as you type. <b>open in StrudelUI</b> takes the example into the app.</p>
+<pre class="ex">setcpm(120/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+stack(
+  kick,
+)</pre>
+  <p>That's a kick drum on every beat. Three lines do the work:</p>
+  <ul>
+    <li><code>setcpm(120/4)</code> sets the tempo: 120 beats per minute, 4 beats to a bar.</li>
+    <li><code>const kick = …</code> is a <b>track</b>. <code>s("bd")</code> picks the sound (a bass drum), <code>.bank("RolandTR909")</code> picks which drum machine it comes from.</li>
+    <li><code>stack(kick)</code> at the end is the <b>mix</b>: the tracks that play together.</li>
+  </ul>
+  <p>Try it: in the code above, change one <code>~</code> to an <code>x</code> and listen.</p>
+</section>
+
+<section id="steps">
+  <h2>Steps and rhythm</h2>
+  <p>A bar has 16 steps, four per beat. In <code>.struct("…")</code>, <code>x</code> is a hit and <code>~</code> is a rest. The extra spaces between groups of four are only there to make the beats easy to see.</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+const hats = s("hh").bank("RolandTR909")
+  .struct("~ ~ x ~  ~ ~ x ~  ~ ~ x ~  ~ ~ x ~")
+
+const clap = s("cp").bank("RolandTR909")
+  .struct("~ ~ ~ ~  x ~ ~ ~  ~ ~ ~ ~  x ~ ~ ~")
+
+stack(
+  kick,
+  hats,
+  clap,
+)</pre>
+  <p>Kick on every beat, hats on the off-beats, a clap on beats 2 and 4: the classic house groove. In the app you'd click those steps on the grid instead.</p>
+  <p>Strudel has shorthands for repeating patterns. <code>[ ]</code> groups steps and <code>*</code> repeats the group, so <code>"[x x]*8"</code> is sixteen hits and <code>"[~ x]*4"</code> is a hit on every second eighth. StrudelUI reads these and shows them on the grid. It keeps your notation until you edit that row, then writes it out step by step.</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("[x ~ ~ ~]*4")
+
+const hats = s("hh").bank("RolandTR909")
+  .struct("[x x]*8")
+  .gain(.4)
+
+stack(
+  kick,
+  hats,
+)</pre>
+  <p class="docs">Full docs: <a href="https://strudel.cc/learn/mini-notation/" target="_blank" rel="noopener">mini-notation ↗</a></p>
+</section>
+
+<section id="sounds">
+  <h2>Sounds and kits</h2>
+  <p>Strudel comes with thousands of sounds: classic drum machines, sampled instruments and synths. Drum sounds have short names: <code>bd</code> bass drum, <code>sd</code> snare, <code>cp</code> clap, <code>hh</code> closed hat, <code>oh</code> open hat, <code>rd</code> ride, <code>lt</code> <code>mt</code> <code>ht</code> toms.</p>
+  <ul>
+    <li><code>.bank("RolandTR808")</code> picks the drum machine. Swap 909 for 808 below and the whole beat changes character.</li>
+    <li><code>s("bd:3")</code> picks a variation: most sounds have several, numbered from 0.</li>
+  </ul>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd:1").bank("RolandTR808")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ x ~")
+
+const snare = s("sd").bank("RolandTR808")
+  .struct("~ ~ ~ ~  x ~ ~ ~  ~ ~ ~ ~  x ~ ~ ~")
+
+const hats = s("hh").bank("RolandTR808")
+  .struct("[x x]*8")
+  .gain(.35)
+
+stack(
+  kick,
+  snare,
+  hats,
+)</pre>
+  <div class="note"><b>In the app:</b> click the sound name under a track to search every sound and hear it before you pick. The <b>kit</b> menu at the top switches every drum track to another machine at once.</div>
+  <p><b>Your own sounds:</b> <b>+ samples → a sounds folder…</b> imports a folder of audio files, the same way strudel.cc's "import sounds folder" does. Each subfolder becomes a sound named after it, and its files are its variations, numbered from 0 in alphabetical order:</p>
+<pre class="note">samples/
+  swoop/   swooplong.wav  swoopshort.wav  swooptight.wav   →  s("swoop:0") … s("swoop:2")
+  smash/   smashhigh.wav  smashlow.wav  smashmiddle.wav    →  s("smash:0") … s("smash:2")</pre>
+  <p>You can also drop files or folders onto the page. They're kept in your browser for next time.</p>
+  <p class="docs">Full docs: <a href="https://strudel.cc/learn/samples/" target="_blank" rel="noopener">samples ↗</a></p>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+  <p>For melodies and basslines, the pattern goes in <code>note("…")</code> instead of <code>.struct</code>: each step is a note name or a rest. A note is a letter and an octave, like <code>c2</code> or <code>g3</code>; <code>#</code> is sharp and <code>b</code> is flat (<code>f#2</code>, <code>eb2</code>). Lower numbers are lower notes.</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+const bass = note("~ ~ c2 ~  ~ ~ c2 ~  ~ ~ eb2 ~  ~ ~ g1 ~").s("sawtooth")
+  .decay(.15)
+  .sustain(0)
+  .lpf(600)
+
+stack(
+  kick,
+  bass,
+)</pre>
+  <p><code>.s("sawtooth")</code> plays the notes on a synth. Try <code>"square"</code>, <code>"triangle"</code> or <code>"supersaw"</code>. <code>.decay</code> and <code>.sustain</code> shape each note: here every note is a short pluck.</p>
+  <div class="note"><b>In the app:</b> right-click a note step (long-press on a phone) for a small piano, or scroll over it to nudge it up and down.</div>
+  <p class="docs">Full docs: <a href="https://strudel.cc/learn/notes/" target="_blank" rel="noopener">notes ↗</a> · <a href="https://strudel.cc/learn/tonal/" target="_blank" rel="noopener">scales and chords ↗</a> · <a href="https://strudel.cc/learn/synths/" target="_blank" rel="noopener">synths ↗</a></p>
+</section>
+
+<section id="mix">
+  <h2>Mix and effects</h2>
+  <p>Each line under a track is one setting. StrudelUI's sliders and effects panel just add or change these lines:</p>
+  <ul>
+    <li><code>.gain(.8)</code> volume (the gain slider)</li>
+    <li><code>.lpf(800)</code> low-pass filter: lower numbers sound darker (the high cut slider)</li>
+    <li><code>.room(.5)</code> reverb (the space slider)</li>
+    <li><code>.delay(.3)</code>, <code>.distort(1)</code>, <code>.crush(6)</code>, <code>.pan(.2)</code> and more in the <b>fx</b> panel</li>
+  </ul>
+  <p>In the mix, a track with <code>//</code> in front is <b>muted</b>: it's commented out, so it doesn't play. Remove the <code>//</code> in front of <code>hats</code> below while it plays.</p>
+<pre class="ex">setcpm(126/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+  .duckorbit(2)
+  .duckdepth(.6)
+  .orbit(1)
+
+const pad = note("c3 ~ ~ ~  ~ ~ ~ ~  eb3 ~ ~ ~  ~ ~ ~ ~").s("supersaw")
+  .add(note("0,3,7"))
+  .lpf(1200)
+  .room(.6)
+  .gain(.4)
+  .orbit(2)
+
+const hats = s("hh").bank("RolandTR909")
+  .struct("[~ x]*8")
+  .delay(.3)
+  .gain(.4)
+  .orbit(3)
+
+stack(
+  kick,
+  pad,
+  // hats,
+)</pre>
+  <p>Two more ideas in there:</p>
+  <ul>
+    <li><code>.add(note("0,3,7"))</code> turns each pad note into a chord: the note itself, 3 semitones up and 7 up (a minor chord).</li>
+    <li><code>.orbit(…)</code> puts tracks on separate buses, and <code>.duckorbit(2)</code> makes the kick briefly turn bus 2 down on every hit. That's the "pump" you hear on the pad, and the <b>pump</b> slider in the app.</li>
+  </ul>
+  <p>Soloing a track writes <code>// solo</code> next to it in the mix, so a solo is part of the code too.</p>
+  <p class="docs">Full docs: <a href="https://strudel.cc/learn/effects/" target="_blank" rel="noopener">effects ↗</a></p>
+</section>
+
+<section id="bars">
+  <h2>Bars, scenes and songs</h2>
+  <p>So far every pattern is one bar, repeating. Put several bars in <code>&lt;[ … ] [ … ]&gt;</code> and Strudel plays one per bar, in turn. Tracks can have different lengths: the shorter ones loop underneath.</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+const bass = note("&lt;[~ ~ c2 ~  ~ ~ c2 ~  ~ ~ c2 ~  ~ ~ c2 ~] [~ ~ ab1 ~  ~ ~ ab1 ~  ~ ~ bb1 ~  ~ ~ bb1 ~]&gt;").s("sawtooth")
+  .decay(.15)
+  .sustain(0)
+  .lpf(700)
+
+stack(
+  kick,
+  bass,
+)</pre>
+  <p>A <b>scene</b> is a set of tracks that play together: <code>const intro = stack(kick, hats)</code>. A <b>song</b> plays scenes in order for so many bars each, with <code>arrange</code>, and then starts over:</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+const hats = s("hh").bank("RolandTR909")
+  .struct("[~ x]*8")
+  .gain(.4)
+
+const bass = note("~ ~ c2 ~  ~ ~ c2 ~  ~ ~ eb2 ~  ~ ~ g1 ~").s("sawtooth")
+  .decay(.15)
+  .sustain(0)
+  .lpf(600)
+
+const intro = stack(kick, hats)
+const drop = stack(kick, hats, bass)
+
+const song = arrange(
+  [2, intro],
+  [4, drop],
+)
+
+song</pre>
+  <div class="note"><b>In the app:</b> the bar pager above the grid adds bars and copies them; <b>+ scene</b> saves the tracks playing now as a scene; the song row strings scenes together, and the <b>loop / song</b> switch picks what plays.</div>
+  <p class="docs">Full docs: <a href="https://strudel.cc/learn/time-modifiers/" target="_blank" rel="noopener">time and structure ↗</a></p>
+</section>
+
+<section id="files">
+  <h2>Saving and exporting</h2>
+  <p>Your tune autosaves in the browser as you work. To keep versions:</p>
+  <ul>
+    <li><b>save</b> (or <kbd>cmd</kbd>/<kbd>ctrl</kbd>+<kbd>s</kbd>) keeps a named copy in this browser; the file menu (the tune's name, top left) opens and downloads them.</li>
+    <li><b>export → code</b> downloads the tune as a <code>.js</code> file. It's plain Strudel, so it also runs on <a href="https://strudel.cc" target="_blank" rel="noopener">strudel.cc</a>, or use <b>open in strudel</b> above the code.</li>
+    <li><b>export → mix</b> renders a WAV, and <b>stems</b> renders one WAV per track (zipped) for a DAW, both faster than real time.</li>
+    <li><b>● rec</b> records what you play live, scene changes and all.</li>
+  </ul>
+  <p>Everything stays in your browser: clearing site data clears it, so download anything you want to keep.</p>
+</section>
+
+<section id="beyond">
+  <h2>Past the grid</h2>
+  <p>The grid is a way into Strudel, not the edge of it. Any track the grid can't show as steps still plays: it shows up as a <b>code</b> track, its hits outlined as they play, and you edit it in the code panel. A few things to try:</p>
+<pre class="ex">setcpm(124/4)
+
+const kick = s("bd").bank("RolandTR909")
+  .struct("x ~ ~ ~  x ~ ~ ~  x ~ ~ ~  x ~ ~ ~")
+
+const riff = n("&lt;0 2 4 7&gt;(3,8)").scale("C3:minor").s("triangle")
+  .decay(.2)
+  .sustain(0)
+  .jux(rev)
+  .gain(.5)
+
+stack(
+  kick,
+  riff,
+)</pre>
+  <ul>
+    <li><code>(3,8)</code> is a <b>euclidean</b> rhythm: 3 hits spread as evenly as possible over 8 steps.</li>
+    <li><code>&lt;0 2 4 7&gt;</code> takes a different note each bar, and <code>.scale("C3:minor")</code> turns the numbers into notes of a scale.</li>
+    <li><code>.jux(rev)</code> plays the pattern backwards in the right ear.</li>
+  </ul>
+  <p>From here, Strudel's own <a href="https://strudel.cc/workshop/getting-started/" target="_blank" rel="noopener">workshop</a> and <a href="https://strudel.cc/learn/" target="_blank" rel="noopener">reference</a> go much further. Everything there works in StrudelUI's code panel.</p>
+</section>
+
+  </article>
+</div>
+<button class="to-top" type="button" aria-label="back to top" title="back to top">↑</button>
+<script type="module" src="learn.js"></script>
+</body>
+</html>

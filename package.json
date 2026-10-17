@@ -1,0 +1,15 @@
+{
+  "name": "strudelui",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "python3 -m http.server 5173",
+    "test": "node --test",
+    "smoke": "node scripts/smoke.mjs",
+    "update-strudel": "node scripts/update-strudel.mjs"
+  }
+}

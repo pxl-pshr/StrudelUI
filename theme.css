@@ -1,0 +1,15 @@
+/* "strudel" theme: strudel.cc's own colours (its strudelTheme: #222 ground,
+   white text, purple functions). Overrides the default palette each page
+   sets on :root; theme.js applies the saved choice before first paint. */
+:root[data-theme="strudel"] {
+  --bg: #222222;
+  --panel: #1a1a1a;
+  --line: #3a3a3a;
+  --cell: #2e2e2e;
+  --cell-beat: #353535;
+  --text: #f3f4f6;
+  --dim: #9ca3af; /* 6:1 or better on these backgrounds */
+  --accent: #c792ea;
+  --accent-ink: #1c1424;
+  --err: #ff8a7a;
+}

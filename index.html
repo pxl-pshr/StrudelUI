@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StrudelUI</title>
+<meta name="description" content="A step sequencer and mixer for Strudel: the grid writes the code, the code drives the grid.">
+<meta name="theme-color" content="#0c0d0f">
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%230c0d0f'/%3E%3Cpath d='M7 4H4v12h3M13 4h3v12h-3' fill='none' stroke='%23c8cbd0' stroke-width='1.8'/%3E%3Crect x='8' y='8' width='4' height='4' rx='.8' fill='%23d6f5a0'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0c0d0f;
+    --panel: #121316;
+    --line: #22242a;
+    --cell: #1a1c20;
+    --cell-beat: #1f2126;
+    --text: #c8cbd0;
+    --dim: #858a93; /* 4.6:1 or better on every background here */
+    --accent: #d6f5a0;
+    --accent-ink: #11140c;
+    --err: #ff8a7a;
+    --gap: 3px;
+    --step: 28px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  html { scroll-padding-top: var(--head, 0px); } /* focus scrolls land below the sticky header */
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 12px/1.4 var(--mono);
+    min-height: 100vh;
+  }
+  button { font: inherit; color: inherit; }
+
+  header {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    /* stays at the top; popovers (z 20) open above it */
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+  }
+  h1 { font-size: 13px; font-weight: 400; margin: 0 8px 0 0; display: flex; align-items: center; gap: 8px; }
+  /* the logo: a lit step inside mini-notation brackets, [ x ] */
+  .logo { width: 20px; height: 20px; flex: none; }
+  .logo .br { fill: none; stroke: var(--text); stroke-width: 1.6; }
+  .logo .on { fill: var(--accent); }
+  .gh { display: inline-flex; color: var(--dim); }
+  .gh:hover, .gh:focus-visible { color: var(--text); }
+  .ctl { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+  #play {
+    min-width: 84px; padding: 6px 12px; border-radius: 4px; cursor: pointer;
+    background: var(--cell-beat); border: 1px solid var(--line);
+  }
+  #play.live { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #play:disabled { opacity: .5; cursor: default; }
+  #bpm {
+    width: 56px; padding: 5px 6px; border-radius: 4px; text-align: right;
+    background: var(--cell); border: 1px solid var(--line); color: var(--text); font: inherit;
+  }
+  .push { margin-left: auto; }
+  .link {
+    background: none; border: 0; padding: 0; cursor: pointer; color: var(--dim);
+    text-decoration: none; font: inherit;
+  }
+  .link:hover { color: var(--text); }
+
+  main {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr);
+    align-items: start;
+  }
+
+  /* rack */
+  .rack-wrap { padding: 16px 20px; border-right: 1px solid var(--line); }
+  /* only the grid sets the rack's width; the bar pager, footer, scenes/song and
+     the status line wrap inside it instead of widening it into the code panel */
+  .rack-wrap > :not(#rack):not(.rack-head):not(.sr-only) { width: 0; min-width: 100%; }
+  .row, .rack-head {
+    display: grid; align-items: center; column-gap: 12px;
+    grid-template-columns: 150px max-content 116px max-content;
+  }
+  .rack-head { color: var(--dim); padding-bottom: 8px; }
+  .col-head { text-align: left; white-space: nowrap; }
+  .col-head::after { content: ' ▾'; opacity: .5; }
+  .row { padding: 3px 0; transition: opacity .15s; }
+  .row.silent { opacity: .35; }
+  .name {
+    display: flex; align-items: center; gap: 6px; padding: 4px 0; text-align: left;
+    background: none; border: 0; color: var(--text); white-space: nowrap;
+    cursor: grab; touch-action: none; user-select: none;
+  }
+  .who { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+  .who .name { padding: 0; }
+  .name .label { overflow: hidden; text-overflow: ellipsis; }
+  .chip {
+    max-width: 100%; padding: 1px 0 0 17px; border: 0; background: none; cursor: pointer;
+    color: var(--dim); font-size: 10px; text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chip:hover, .chip:focus-visible { color: var(--accent); }
+  .chip:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+  .chip .miss { color: var(--err); font-weight: 600; } /* sound not in this browser */
+  .tip {
+    position: fixed; z-index: 30; max-width: 280px; padding: 6px 9px; pointer-events: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    color: var(--dim); font-size: 11px; line-height: 1.5;
+  }
+  .tip b { color: var(--err); font-weight: 600; }
+  #kit {
+    max-width: 150px; padding: 4px 6px; border-radius: 4px; font: inherit;
+    background: var(--cell); border: 1px solid var(--line); color: var(--text);
+  }
+
+  /* popovers: sound picker, fx, menus */
+  .pop {
+    position: fixed; z-index: 20;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  }
+  .pop.sheet { left: 8px; right: 8px; bottom: 8px; width: auto; }
+  .picker { width: 330px; max-height: min(400px, 70vh); display: flex; flex-direction: column; }
+  .menu { display: flex; flex-direction: column; padding: 4px; min-width: 150px; }
+  .menu-item {
+    padding: 6px 10px; border: 0; border-radius: 3px; background: none; text-align: left; cursor: pointer;
+  }
+  .menu-item:hover { background: var(--cell-beat); }
+  .menu-item:focus-visible { background: var(--cell-beat); outline: 1px solid var(--accent); outline-offset: -1px; }
+  .menu-item.danger { color: var(--err); }
+  .menu-sep { height: 1px; margin: 4px 0; background: var(--line); }
+  .fx-panel { width: 300px; padding: 6px 10px 10px; }
+  .settings-panel { width: 340px; }
+  .set-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 10px; padding: 5px 0; }
+  .set-label { color: var(--dim); }
+  .set-output { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+  .set-output select { max-width: 100%; }
+  .set-note { color: var(--dim); }
+  .set-size { display: grid; grid-template-columns: 1fr 44px; align-items: center; gap: 10px; }
+  .set-helpers { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .seg + .seg { border-left: 0; }
+  .set-reset { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+  .set-warn { margin: 0 0 8px; color: var(--text); }
+  .set-choice { display: flex; gap: 16px; }
+  .link.danger { color: var(--err); }
+  .fx-title { color: var(--dim); padding: 4px 0 6px; }
+  .fx-row { display: grid; grid-template-columns: 70px 1fr 64px; align-items: center; gap: 10px; padding: 3px 0; }
+  .fx-toggle {
+    padding: 3px 6px; border-radius: 3px; cursor: pointer; text-align: left;
+    background: var(--cell); border: 1px solid var(--line); color: var(--dim);
+  }
+  .fx-toggle.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .fx-value { color: var(--dim); font-size: 10px; text-align: right; white-space: nowrap; }
+  .picker-search {
+    margin: 8px; padding: 7px 8px; border-radius: 4px; font: inherit;
+    background: var(--cell); border: 1px solid var(--line); color: var(--text); outline: none;
+  }
+  .picker-search:focus { border-color: var(--accent); }
+  .picker-list { overflow-y: auto; flex: 1; padding: 0 4px 4px; }
+  .picker-group { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 10px 6px 4px; }
+  .picker-empty { color: var(--dim); padding: 12px 6px; }
+  .snd {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 3px; cursor: pointer;
+  }
+  .snd:hover { background: var(--cell); }
+  .snd.sel { background: var(--accent); color: var(--accent-ink); }
+  .snd-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .snd-meta { color: var(--dim); font-size: 10px; white-space: nowrap; }
+  .snd.sel .snd-meta { color: var(--accent-ink); }
+  .snd-del { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; opacity: .6; }
+  .snd-del:hover { opacity: 1; }
+  .picker-foot {
+    display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-top: 1px solid var(--line); color: var(--dim);
+    font-size: 10px;
+  }
+  .picker-foot > span { flex: 1; }
+
+  /* sample drop target */
+  #drop-hint {
+    display: none; position: fixed; inset: 10px; z-index: 30; pointer-events: none;
+    border: 1.5px dashed var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--bg) 85%, transparent);
+    color: var(--accent); align-items: center; justify-content: center;
+  }
+  body.dropping #drop-hint { display: flex; }
+  .tag { color: var(--dim); font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+  .grip { color: var(--dim); opacity: .35; font-size: 11px; transition: opacity .15s; }
+  .name:hover .grip, .name:focus-visible .grip { opacity: 1; }
+  .name:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  .sorting, .sorting * { cursor: grabbing !important; }
+  .row.dragging { background: var(--panel); outline: 1px solid var(--line); border-radius: 4px; position: relative; z-index: 1; }
+  .row.dragging .grip { opacity: 1; color: var(--accent); }
+
+  .steps { display: flex; gap: var(--gap); touch-action: none; } /* drag paints instead of scrolling */
+  .steps > * { flex: 0 0 var(--step); }
+  .step:nth-child(4n+1):not(:first-child) { margin-left: 6px; }
+  .rack-head .steps span:nth-child(4n+1):not(:first-child) { margin-left: 6px; }
+  .rack-head .steps span { text-align: center; }
+  .step {
+    height: var(--step); padding: 0; border: 0; border-radius: 3px; cursor: pointer;
+    background: var(--cell); font-size: 9px; color: var(--accent-ink);
+    outline-offset: -1px;
+  }
+  .step:nth-child(4n+1) { background: var(--cell-beat); }
+  .step.on { background: var(--accent); }
+  .step.now { outline: 1px solid var(--dim); }
+  .step.on.now { background: #fff; outline-color: #fff; }
+  .step:focus-visible { outline: 1px solid var(--accent); }
+  /* code tracks: steps read from the playing pattern, edited in the editor */
+  .step.ro { cursor: text; background: transparent; box-shadow: inset 0 0 0 1px var(--cell-beat); }
+  .step.ro.on { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); }
+  .step.ro.on.now { background: var(--accent); color: var(--accent-ink); }
+  .tog:disabled, input[type=range]:disabled { opacity: .3; cursor: default; }
+
+  .togs { display: flex; gap: 4px; }
+  .tog {
+    width: 22px; height: 22px; padding: 0; border-radius: 3px; cursor: pointer;
+    background: var(--cell); border: 1px solid var(--line); color: var(--dim); font-size: 10px;
+  }
+  .tog.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .tog.fx { width: auto; min-width: 22px; padding: 0 5px; }
+  .tog.fx.on { color: var(--accent); border-color: var(--accent); }
+  .rename {
+    width: 120px; padding: 2px 4px; border-radius: 3px; font: inherit;
+    background: var(--cell); border: 1px solid var(--accent); color: var(--text); outline: none;
+  }
+  .row.fresh { background: var(--panel); border-radius: 4px; transition: background 1s; }
+  .rack-foot { display: flex; gap: 16px; align-items: center; padding-top: 10px; }
+  .rack-foot .push { margin-left: auto; }
+  .status-action { color: var(--accent); }
+  .file-btn {
+    padding: 5px 8px; border-radius: 4px; cursor: pointer; max-width: 180px;
+    background: none; border: 1px solid var(--line); color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-btn:hover { border-color: var(--dim); }
+  #rec.live { color: var(--err); }
+  .link:disabled { opacity: .35; cursor: default; }
+
+  /* bars */
+  .pager { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-bottom: 10px; color: var(--dim); }
+  .pager-label { margin-right: 4px; }
+  .pager-gap { flex: 1; }
+  .page {
+    min-width: 24px; height: 22px; padding: 0 6px; border-radius: 3px; cursor: pointer;
+    background: var(--cell); border: 1px solid var(--line); color: var(--dim); font-size: 11px;
+  }
+  .page.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+  .page.playing:not(.on) { border-color: var(--accent); color: var(--accent); }
+  .bars-tag { color: var(--dim); font-size: 10px; }
+  /* a bar shown again because the track is shorter (it loops): tinted while
+     browsing bars, not while the grid follows playback, where it really plays */
+  #rack:not(.following) .row.looping .step.on { opacity: .55; }
+
+  /* scenes + song */
+  .arrange { display: grid; gap: 8px; padding-top: 14px; margin-top: 10px; border-top: 1px solid var(--line); }
+  .arr-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .arr-label { color: var(--dim); width: 56px; }
+  .scene-wrap { display: inline-flex; }
+  .scene, .entry, .scene-more, .seg {
+    height: 24px; padding: 0 8px; cursor: pointer; font-size: 11px;
+    background: var(--cell); border: 1px solid var(--line); color: var(--text);
+  }
+  .scene { border-radius: 3px 0 0 3px; }
+  .scene-more { border-radius: 0 3px 3px 0; border-left: 0; padding: 0 5px; color: var(--dim); }
+  .scene.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .entry { border-radius: 3px; }
+  .entry.on { border-color: var(--accent); color: var(--accent); }
+  .mode { display: inline-flex; margin-left: auto; }
+  .seg:first-child { border-radius: 3px 0 0 3px; }
+  .seg:last-child { border-radius: 0 3px 3px 0; border-left: 0; }
+  .seg.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+
+  /* small panels: name it, export */
+  .ask-panel { width: 280px; padding: 6px 10px 10px; }
+  .ask { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+  .ask .rename { flex: 1; width: auto; }
+  .bars-input { flex: 0 0 64px !important; }
+  .export-note { text-align: left; white-space: normal; padding-top: 6px; }
+  .saved-list { max-height: 60vh; overflow-y: auto; }
+  .saved { display: flex; align-items: center; }
+  .saved .menu-item { flex: 1; }
+  .note-panel { width: 330px; }
+  .piano { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; padding: 4px 0 8px; }
+  .key {
+    height: 54px; padding: 0 0 4px; border-radius: 0 0 3px 3px; cursor: pointer; font-size: 9px;
+    display: flex; align-items: flex-end; justify-content: center;
+    background: var(--text); color: var(--bg); border: 1px solid var(--line);
+  }
+  .key.black { height: 36px; background: var(--cell-beat); color: var(--text); }
+  .key.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* trim: waveform with start / end handles */
+  .trim-panel { width: 330px; }
+  .trim-wave {
+    position: relative; height: 72px; margin: 2px 0 8px; border-radius: 3px;
+    background: var(--cell); cursor: ew-resize; touch-action: none;
+  }
+  .trim-wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .trim-msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
+  .trim-handle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); }
+  .trim-handle::before { content: ''; position: absolute; top: 0; left: -4px; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); }
+  .trim-handle::after { content: ''; position: absolute; inset: 0 -8px; } /* wider grab area */
+  .trim-handle:focus-visible { outline: 1px solid var(--text); outline-offset: 3px; }
+  .trim-foot { display: flex; align-items: center; gap: 12px; }
+  .trim-info { flex: 1; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .tog.solo.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  /* controllers: map mode outlines what can be mapped, what is, and what's waiting */
+  #map.live { color: var(--accent); }
+  body.mapping [data-map] { outline: 1px dashed var(--dim); outline-offset: 1px; }
+  body.mapping [data-map].mapped { outline: 1px solid var(--dim); }
+  body.mapping [data-map].armed { outline: 2px solid var(--accent); }
+  .map-panel { width: 340px; }
+  .map-list { max-height: 40vh; overflow-y: auto; padding: 2px 0 6px; }
+  .map-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .map-what { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .map-row.gone .map-what { color: var(--dim); }
+  .map-note { text-align: left; white-space: normal; padding-bottom: 6px; }
+
+  .knobs { display: grid; grid-template-columns: repeat(3, 72px); gap: 10px; }
+  .knob { display: block; }
+  .knob-cap { display: none; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 18px; margin: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--line); }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 10px; margin-top: -4px;
+    border-radius: 50%; background: var(--text); border: 0;
+  }
+  input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--text); border: 0; }
+  input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
+  #pump { width: 90px; }
+
+  #empty { color: var(--dim); padding: 12px 0; }
+  #empty code { color: var(--text); }
+  #status { padding-top: 14px; color: var(--dim); min-height: 2.8em; }
+  #status.err { color: var(--err); }
+  .help-panel { width: 340px; }
+  .tips { list-style: none; margin: 0; padding: 0 0 4px; }
+  .tips li { padding: 3px 0; }
+  .tips b { color: var(--text); font-weight: normal; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* code */
+  /* pinned below the sticky header: --head is its height (app.js keeps it current) */
+  .code-wrap { min-width: 0; position: sticky; top: var(--head, 0px); max-height: calc(100vh - var(--head, 0px)); display: flex; flex-direction: column; }
+  .code-head {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 16px 20px 8px; color: var(--dim);
+  }
+  .code-head > * { white-space: nowrap; }
+  .code-head span { margin-right: auto; }
+  #dirty { color: var(--accent); font-style: normal; }
+  #editor { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 20px 0; }
+  #editor .cm-editor { outline: none; }
+  /* code helpers (settings): CodeMirror's autocomplete list and docs panel, and
+     the ctrl+hover docs, in the theme's colours. The docs are Strudel's
+     .autocomplete-info-* markup, which strudel.cc styles in its own CSS. */
+  #editor .cm-tooltip, #editor .cm-completionInfo {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+    font: 12px/1.4 var(--mono); box-shadow: 0 6px 24px rgb(0 0 0 / .45);
+  }
+  #editor .cm-tooltip-arrow { display: none; }
+  #editor .cm-tooltip-autocomplete > ul { font-family: var(--mono); max-height: 14em; }
+  #editor .cm-tooltip-autocomplete > ul > li { padding: 2px 10px; }
+  #editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent); color: var(--accent-ink); }
+  #editor .cm-completionIcon { display: none; }
+  #editor .cm-completionMatchedText { text-decoration: none; color: var(--accent); }
+  #editor li[aria-selected] .cm-completionMatchedText { color: inherit; }
+  #editor .cm-completionInfo, #editor .cm-tooltip-hover { width: 340px; max-width: 80vw; max-height: 50vh; overflow: auto; padding: 8px 10px; }
+  #editor .cm-completionInfo { margin: 0 4px; }
+  #editor .cm-tooltip-hover .cm-tooltip-section { padding: 0; }
+  .autocomplete-info-container { white-space: normal; } /* CodeMirror's pre-line would show the template's line breaks */
+  .autocomplete-info-function-name { margin: 0 0 4px; font-size: 13px; font-weight: normal; color: var(--accent); }
+  .autocomplete-info-function-synonyms { color: var(--dim); margin-bottom: 6px; }
+  .autocomplete-info-function-description p { margin: 0 0 6px; }
+  .autocomplete-info-function-description code { color: var(--accent); }
+  .autocomplete-info-section-title { margin: 10px 0 4px; font-size: 11px; font-weight: normal; color: var(--dim); }
+  .autocomplete-info-params-list { margin: 0; padding: 0; list-style: none; }
+  .autocomplete-info-param-item { margin-bottom: 4px; }
+  .autocomplete-info-param-type { color: var(--dim); margin-left: 6px; }
+  .autocomplete-info-param-desc { color: var(--dim); }
+  .autocomplete-info-example-code {
+    margin: 0 0 4px; padding: 4px 6px; background: var(--cell); border-radius: 3px;
+    font: inherit; white-space: pre-wrap; word-break: break-word;
+  }
+
+  @media (max-width: 1180px) {
+    main { grid-template-columns: minmax(0, 1fr); }
+    .rack-wrap { border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+    .code-wrap { position: static; max-height: none; }
+  }
+  /* settings → layout: below puts the code under the sequencer at any width */
+  :root[data-layout="below"] main { grid-template-columns: minmax(0, 1fr); }
+  /* the rack only as wide as its tracks, so the controls aligned right in the
+     bar, undo and loop/song rows stay next to the grid on wide screens */
+  :root[data-layout="below"] .rack-wrap { border-right: 0; border-bottom: 0; overflow-x: auto; width: max-content; max-width: 100%; }
+  :root[data-layout="below"] .code-wrap { position: static; max-height: none; border-top: 1px solid var(--line); }
+  @media (max-width: 760px) {
+    header, .rack-wrap, .code-head { padding-left: 16px; padding-right: 16px; }
+    :root[data-layout="below"] .rack-wrap { width: auto; } /* phone rows are fluid: fill the screen */
+    #editor { padding: 0 0 16px; }
+    .rack-head { display: none; }
+    .row {
+      grid-template-columns: 1fr max-content; row-gap: 6px; padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .steps { grid-column: 1 / -1; grid-row: 2; }
+    .togs { grid-column: 2; grid-row: 1; }
+    .knobs { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); }
+    /* two rows of eight, sized from the row itself: steps big enough to hit with a finger */
+    .steps { flex-wrap: wrap; row-gap: var(--gap); }
+    .steps > .step { flex: 0 0 calc((100% - 6px - 7 * var(--gap)) / 8); height: auto; aspect-ratio: 1; }
+    .steps > .step:nth-child(9):not(:first-child) { margin-left: 0; } /* row 2 starts flush */
+    .step { font-size: 10px; }
+    .tog, .page { min-width: 30px; height: 30px; }
+    .knob-cap { display: block; font-size: 10px; color: var(--dim); }
+    input[type=range] { height: 28px; }
+    input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -8px; }
+    input[type=range]::-moz-range-thumb { width: 18px; height: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><path class="br" d="M6 2.5H2.5v15H6M14 2.5h3.5v15H14"/><rect class="on" x="7.5" y="7.5" width="5" height="5" rx="1"/></svg>strudelui</h1>
+  <button id="file" class="file-btn" type="button" title="save, open, download">untitled ▾</button>
+  <button id="save" class="link" type="button" title="save this tune in the browser (cmd+s) · open, download and more in the menu on the left">save</button>
+  <button id="play" data-map="play" disabled>loading…</button>
+  <label class="ctl">bpm <input id="bpm" data-map="bpm" type="number" min="40" max="240" step="1"></label>
+  <label class="ctl" id="pump-ctl">pump <input id="pump" data-map="pump" type="range" min="0" max="1" step="0.01"></label>
+  <label class="ctl">kit <select id="kit"><option value="">—</option></select></label>
+  <a class="link push" href="learn.html" title="learn Strudel and StrudelUI step by step">learn</a>
+  <button id="add-samples" class="link" type="button" title="import a sounds folder or audio files (or drop them anywhere)">+ samples</button>
+  <input id="files" type="file" accept="audio/*,.wav,.mp3,.ogg,.flac,.aif,.aiff,.m4a" multiple hidden>
+  <input id="folder" type="file" webkitdirectory multiple hidden>
+  <button id="rec" class="link" type="button" title="record what plays to a WAV">● rec</button>
+  <button id="export" class="link" type="button" title="render the mix or stems to WAV, or save the code as .js">export</button>
+  <button id="map" class="link" type="button" title="map a MIDI controller or computer keys to the controls" aria-haspopup="dialog">map</button>
+  <button id="settings" class="link" type="button" title="theme, layout, audio output, code size, helpers, keys" aria-haspopup="dialog">settings</button>
+  <a class="gh" href="https://github.com/pxl-pshr/StrudelUI" target="_blank" rel="noopener" title="source on GitHub (free software, AGPL-3.0)" aria-label="source on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+</header>
+<div id="drop-hint" aria-hidden="true">drop audio files or folders · each folder becomes a sound</div>
+<main>
+  <section class="rack-wrap">
+    <div id="pager" class="pager"></div>
+    <div class="rack-head">
+      <span></span>
+      <div class="steps" aria-hidden="true"><span>1</span><span></span><span></span><span></span><span>2</span><span></span><span></span><span></span><span>3</span><span></span><span></span><span></span><span>4</span><span></span><span></span><span></span></div>
+      <span></span>
+      <div class="knobs" id="columns"></div>
+    </div>
+    <div id="rack"></div>
+    <div class="rack-foot">
+      <button id="add-track" class="link" type="button">+ track</button>
+      <button id="undo" class="link push" type="button" title="undo (cmd+z)">undo</button>
+      <button id="redo" class="link" type="button" title="redo (shift+cmd+z)">redo</button>
+      <button id="help" class="link" type="button" title="tips" aria-label="tips" aria-haspopup="dialog">?</button>
+    </div>
+    <div id="arrange" class="arrange"></div>
+    <div id="empty" hidden>No tracks yet: add one with <b>+ track</b>, or in the code as <code>const name = …</code> listed in <code>stack(…)</code>.</div>
+    <div id="announce" class="sr-only" role="status" aria-live="polite"></div>
+    <div id="status"></div>
+  </section>
+  <section class="code-wrap">
+    <div class="code-head">
+      <span>code <em id="dirty" hidden>· ctrl+enter to apply</em></span>
+      <button id="copy" class="link">copy</button>
+      <button id="open" class="link" type="button" title="open this tune on strudel.cc">open in strudel ↗</button>
+    </div>
+    <div id="editor"></div>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

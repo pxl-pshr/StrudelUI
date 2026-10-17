@@ -1,0 +1,59 @@
+# Weekly: if npm has a newer @strudel/repl, swap it into vendor/, run the
+# tests and the browser smoke test, and open a pull request with the results.
+# (A pull request opened by this workflow doesn't start other workflows,
+# so the tests run here and their results go in its description.)
+name: strudel update
+on:
+  schedule:
+    - cron: '0 7 * * 1' # Mondays, 07:00 UTC
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: strudel
+        run: node scripts/update-strudel.mjs
+      - id: unit
+        if: steps.strudel.outputs.updated == 'true'
+        continue-on-error: true
+        run: node --test 2>&1 | tail -n 12 | tee "$RUNNER_TEMP/unit.txt"
+      - id: smoke
+        if: steps.strudel.outputs.updated == 'true'
+        continue-on-error: true
+        run: node scripts/smoke.mjs 2>&1 | tee "$RUNNER_TEMP/smoke.txt"
+      - if: steps.strudel.outputs.updated == 'true'
+        run: |
+          {
+            echo "Updates the vendored Strudel engine (@strudel/repl) from ${{ steps.strudel.outputs.current }} to ${{ steps.strudel.outputs.latest }}."
+            echo
+            echo "Release notes: https://codeberg.org/uzu/strudel/releases"
+            echo
+            echo "**Unit tests:** ${{ steps.unit.outcome }}  "
+            echo "**Browser smoke test:** ${{ steps.smoke.outcome }}"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/smoke.txt"
+            echo '```'
+            echo
+            echo "Merge when both pass. If something failed, the smoke output above says what."
+          } > "$RUNNER_TEMP/body.md"
+      - if: steps.strudel.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: strudel-update
+          delete-branch: true
+          title: Update Strudel to ${{ steps.strudel.outputs.latest }}
+          commit-message: Update Strudel (@strudel/repl) to ${{ steps.strudel.outputs.latest }}
+          author: pxlpshr <pshr.art@gmail.com>
+          committer: pxlpshr <pshr.art@gmail.com>
+          body-path: ${{ runner.temp }}/body.md
+          add-paths: |
+            vendor/strudel-repl
+            README.md

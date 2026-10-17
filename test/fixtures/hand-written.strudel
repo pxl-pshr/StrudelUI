@@ -1,0 +1,49 @@
+// a tune written by hand, the way people write Strudel:
+// sections, compact patterns, layers, things the grid can't edit
+setcpm(128/4)
+
+
+// ════ DRUMS ════
+
+// steady kick, pattern in s()
+const kick = s("bd*4").bank("RolandTR808")
+  .gain(.9)
+  .orbit(1)
+
+// hats as 16ths, written short
+const hats = s("hh").bank("RolandTR808")
+  .struct("[x x]*8")
+  .gain("[.3 .5]*8")
+  .orbit(3)
+
+const clap = s("cp")
+  .struct("[~ x]*2")
+  .room(.4)
+  .orbit(3)
+
+
+// ════ BASS ════
+
+const bass = note("[~ c2 ~ c2 ~ eb2 ~ g1]*2")
+  .s("sawtooth")
+  .lpf(400)
+  .bank("RolandTR808")
+  .orbit(2)
+
+// two layers in one
+const chords = stack(
+    n("0 ~ ~ ~").scale("C3:minor"),
+    n("~ ~ 2 ~").scale("C4:minor")
+  )
+  .s("triangle")
+  .orbit(4)
+
+
+// ════ MIX ════
+stack(
+  kick,
+  hats,
+  // clap,
+  bass,
+  chords,
+)
