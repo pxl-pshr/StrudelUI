@@ -313,9 +313,19 @@ playBtn.addEventListener('click', toggle);
 function toggle() {
   if (playing) editor.stop();
   else {
+    unlockAudio();
     syncFromCode();
     editor.evaluate();
   }
+}
+
+// iPhone / iPad, run inside the tap: play as media, so the silent switch
+// doesn't mute it (Safari 17+), and resume the audio context now, since
+// Strudel's own start (on mousedown) finishes after the gesture has ended
+function unlockAudio() {
+  if (navigator.audioSession) navigator.audioSession.type = 'playback';
+  const ctx = globalThis.getAudioContext?.();
+  if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
 }
 
 const bpm = $('#bpm');
@@ -837,6 +847,7 @@ recBtn.addEventListener('click', async () => {
     return;
   }
   if (!playing) {
+    unlockAudio();
     syncFromCode();
     await editor.evaluate();
   }
