@@ -178,6 +178,7 @@ A weekly GitHub Action opens a pull request when a newer release is out; merge i
 | `scripts/` | the browser smoke test and the Strudel update script |
 | `.github/workflows/` | the tests on every push; the weekly Strudel update pull request |
 | `docs/` | the screenshot |
+| `og.png` | the image link previews show (chat apps, social sites) |
 | `vendor/strudel-repl/` | Strudel's editor and audio engine, [@strudel/repl](https://www.npmjs.com/package/@strudel/repl) 1.3.0, unmodified |
 
 ## License

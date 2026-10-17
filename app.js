@@ -537,7 +537,7 @@ async function downloadWithSamples() {
 const fileBtn = $('#file');
 const showName = () => {
   fileBtn.textContent = `${tuneName} ▾`;
-  document.title = `${tuneName} · StrudelUI`;
+  document.title = `${tuneName} · strudelUI`;
 };
 
 // replace the whole tune (undoable like any edit)
