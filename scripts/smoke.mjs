@@ -47,6 +47,7 @@ const profile = await mkdtemp(join(tmpdir(), 'strudelui-smoke-'));
 // limit for slow CI runners
 const chrome = spawn(chromePath, [
   '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-gpu',
+  '--window-size=1280,900', // the desktop layout (phones get sheets and views)
   '--autoplay-policy=no-user-gesture-required', '--mute-audio',
   '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -733,6 +734,106 @@ try {
     if (r.played.ran < 1) throw new Error("play didn't run the code");
     if (r.played.held) throw new Error('still held after play');
     return 'held through open and reload, runs on play';
+  });
+
+  // ── phones ──
+  await check('phone: views, the track sheet, and touch on steps (tap sets, a drag paints, scrolls don\'t)', async () => {
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    try {
+      await open(`${base}/index.html`, `document.querySelector('#play')?.textContent.includes('play') && document.querySelectorAll('#mix-rows .mix-row').length > 0`);
+      const r = await page(`
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const ed = document.querySelector('strudel-editor').editor;
+        const before = ed.code;
+        const shown = (sel) => !!document.querySelector(sel)?.getClientRects().length;
+        const tab = async (name) => {
+          document.querySelector('#tabs [data-tab="' + name + '"]').click();
+          await wait(50);
+          return { rack: shown('#rack'), mixer: shown('#mixer'), code: shown('#editor') };
+        };
+        const views = { song: await tab('song'), code: await tab('code'), grid: await tab('grid') };
+
+        // touch: a tap sets a step, a drag along the row paints; a scroll sets
+        // nothing (Safari cancels the touch, the finger goes more up or down
+        // than sideways, or the touch stops a scroll still gliding)
+        const row = document.querySelector('#rack .row:not(:has(.ro))');
+        const id = row.dataset.id;
+        const cells = [...row.querySelectorAll('.step')];
+        const off = cells.findIndex((c, i) => !c.classList.contains('on') && !cells[i + 1]?.classList.contains('on') && i < 15);
+        const mid = (el, dx = 0, dy = 0) => {
+          const r = el.getBoundingClientRect();
+          return { clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2 + dy };
+        };
+        const touch = (target, type, at) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerType: 'touch', ...at }));
+        const nothing = () => !cells[off].classList.contains('on') && !cells[off + 1].classList.contains('on') && ed.code === before;
+        const scrolls = [];
+        touch(cells[off], 'pointerdown', mid(cells[off]));
+        touch(window, 'pointercancel');
+        await wait(200);
+        scrolls.push(nothing());
+        touch(cells[off], 'pointerdown', mid(cells[off]));
+        touch(cells[off + 1], 'pointerenter', mid(cells[off], 21, -15)); // a scroll that starts with a sideways drift
+        touch(window, 'pointermove', mid(cells[off], 21, -15));
+        touch(window, 'pointerup', mid(cells[off], 25, -60));
+        await wait(200);
+        scrolls.push(nothing());
+        window.dispatchEvent(new Event('scroll'));
+        touch(cells[off], 'pointerdown', mid(cells[off]));
+        touch(window, 'pointerup', mid(cells[off]));
+        await wait(300);
+        scrolls.push(nothing());
+        const scrolled = scrolls.join() !== 'true,true,true' && scrolls.join();
+        touch(cells[off], 'pointerdown', mid(cells[off]));
+        touch(window, 'pointerup', mid(cells[off], 3, 2));
+        await wait(200);
+        const tapped = cells[off].classList.contains('on');
+        document.querySelector('#undo').click();
+        await wait(200);
+        touch(cells[off], 'pointerdown', mid(cells[off]));
+        touch(cells[off + 1], 'pointerenter', mid(cells[off + 1]));
+        touch(window, 'pointerup', mid(cells[off + 1]));
+        await wait(200);
+        const painted = cells[off].classList.contains('on') && cells[off + 1].classList.contains('on');
+        document.querySelector('#undo').click();
+        await wait(200);
+
+        // the track's ⋯: a sheet with its sliders and length; a slider there moves the grid's and the mixer's
+        row.querySelector('.tog[aria-label="' + id + ' options"]').click();
+        await wait(100);
+        const sheet = document.querySelector('.pop.sheet');
+        const sliders = sheet?.querySelectorAll('.sheet-head input[type=range]').length ?? 0;
+        const lengths = sheet?.querySelectorAll('.sheet-len .seg').length ?? 0;
+        const gain = sheet.querySelector('input[aria-label="' + id + ' gain"]');
+        gain.value = gain.min;
+        gain.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(200);
+        const synced = [...document.querySelectorAll('#rack input[aria-label="' + id + ' gain"], #mix-rows input[aria-label="' + id + ' gain"]')].every((i) => i.value === gain.min);
+        document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        document.querySelector('#undo').click();
+        await wait(200);
+
+        // header ⋯: tempo moves into the sheet and back
+        document.querySelector('#more').click();
+        await wait(100);
+        const inSheet = !!document.querySelector('.pop.sheet #bpm');
+        document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        await wait(50);
+        const back = document.querySelector('#bpm').closest('header') !== null;
+        return { views, scrolled, tapped, painted, sliders, lengths, synced, inSheet, back, restored: ed.code === before };`);
+      const v = r.views;
+      if (!v.song.mixer || v.song.rack || v.song.code || !v.code.code || v.code.rack || !v.grid.rack || v.grid.mixer) throw new Error(`views: ${JSON.stringify(v)}`);
+      if (r.scrolled) throw new Error(`a scroll set a step (cancelled, mostly vertical, stopping a glide: ${r.scrolled})`);
+      if (!r.tapped) throw new Error("a tap didn't set the step");
+      if (!r.painted) throw new Error("a drag along the row didn't paint");
+      if (r.sliders !== 3 || r.lengths !== 4) throw new Error(`track sheet: ${r.sliders} sliders, ${r.lengths} lengths`);
+      if (!r.synced) throw new Error("the sheet's slider didn't move the grid's and the mixer's");
+      if (!r.inSheet || !r.back) throw new Error(`header ⋯: bpm in the sheet ${r.inSheet}, back in the header ${r.back}`);
+      if (!r.restored) throw new Error("undo didn't restore the code");
+      if (errors.length) throw new Error(errors[0]);
+      return 'grid · song · code, tap / scroll / paint, sheet sliders in sync';
+    } finally {
+      await send('Emulation.clearDeviceMetricsOverride');
+    }
   });
 
   // ── the learn page ──

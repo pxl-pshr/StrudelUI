@@ -3,7 +3,7 @@
 // (theme under theme.js's key, the rest under STORE).
 // applyTheme and THEME_STORE come from theme.js, a classic script in <head>.
 
-import { h, popover } from './popover.js';
+import { h, popover, isPhone } from './popover.js';
 
 const STORE = 'strudelui-settings';
 const FONT = { min: 9, max: 20, def: 12 };
@@ -69,8 +69,11 @@ export function applyOutput() {
 }
 
 // onReset: wipes everything and reloads (app.js resetEverything)
+// Phones leave out what needs a wider screen, a keyboard or a mouse: layout
+// (phones show one view at a time), editor keys and docs on ctrl+hover.
 export function openSettings(anchor, { editor, onStatus, onReset }) {
   const s = load();
+  const phone = isPhone();
   const row = (label, ...control) => {
     const line = h('div', 'set-row');
     line.append(h('span', 'set-label', label), ...control);
@@ -184,6 +187,7 @@ export function openSettings(anchor, { editor, onStatus, onReset }) {
   // code helpers: on/off toggles; unset ones keep Strudel's default (off)
   const helpers = h('span', 'set-helpers');
   for (const [key, label, title] of HELPERS) {
+    if (phone && key === 'isTooltipEnabled') continue;
     const b = h('button', 'fx-toggle', label);
     b.type = 'button';
     b.title = title;
@@ -247,11 +251,11 @@ export function openSettings(anchor, { editor, onStatus, onReset }) {
   const pop = popover(anchor, [
     h('div', 'fx-title', 'settings · kept in this browser'),
     row('theme', themes),
-    row('layout', layouts),
+    ...(phone ? [] : [row('layout', layouts)]),
     row('output', outputCtl),
     row('code size', sizeCtl),
     row('helpers', helpers),
-    row('keys', keys),
+    ...(phone ? [] : [row('keys', keys)]),
     reset,
   ], { className: 'fx-panel settings-panel', label: 'settings' });
   themeBtns[0].focus();

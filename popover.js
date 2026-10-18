@@ -12,6 +12,8 @@ export const h = (tag, cls, text) => {
 
 const PHONE = 760; // matches the stylesheet's phone breakpoint
 const MARGIN = 8;
+// the visible viewport, without scrollbars (innerWidth includes them)
+export const isPhone = () => document.documentElement.clientWidth < PHONE;
 let current = null;
 
 export function popover(anchor, children, { className = '', label = '', role = 'dialog', onClose } = {}) {
@@ -23,10 +25,9 @@ export function popover(anchor, children, { className = '', label = '', role = '
   document.body.append(el);
   anchor.setAttribute('aria-expanded', 'true');
 
-  // the visible viewport, without scrollbars (innerWidth/Height include them)
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
-  if (vw < PHONE) el.classList.add('sheet');
+  if (isPhone()) el.classList.add('sheet');
   else {
     const a = anchor.getBoundingClientRect();
     const below = vh - a.bottom - MARGIN * 2;
@@ -68,8 +69,9 @@ export function popover(anchor, children, { className = '', label = '', role = '
   return { el, close };
 }
 
-// a list of actions. items: { label, run, danger? }, or '-' for a divider between groups
-export function menu(anchor, items, opts = {}) {
+// a list of actions. items: { label, run, danger? }, or '-' for a divider between groups.
+// head: elements shown above the items (controls that act in place)
+export function menu(anchor, items, { head = [], ...opts } = {}) {
   anchor.setAttribute('aria-haspopup', 'menu');
   const children = items.map((item) => {
     if (item === '-') {
@@ -88,7 +90,7 @@ export function menu(anchor, items, opts = {}) {
     return b;
   });
   const buttons = children.filter((el) => el.tagName === 'BUTTON');
-  const pop = popover(anchor, children, { className: 'menu', role: 'menu', ...opts });
+  const pop = popover(anchor, [...head, ...children], { className: 'menu', role: head.length ? 'dialog' : 'menu', ...opts });
   buttons[0]?.focus();
   // ↑↓ between items
   pop.el.addEventListener('keydown', (e) => {

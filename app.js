@@ -10,7 +10,7 @@ import { loadBankNames, loadUserSamples, userSoundNames, userSoundFiles, deleteA
 import { openPicker } from './picker.js';
 import { openTrim } from './trim.js';
 import { openSettings, applyEditorSettings, applyOutput } from './settings.js';
-import { popover, menu, h } from './popover.js';
+import { popover, menu, h, isPhone } from './popover.js';
 import { collect, renderMix, renderStems, fitsInMemory, wav, peakDb, startRecording, download } from './export.js';
 import { zip } from './zip.js';
 import { listTunes, getTune, saveTune, deleteTune, fileName, pickFile, readTuneFile, isZip } from './files.js';
@@ -19,6 +19,9 @@ import { initControllers, mark as markControls, renameMappings } from './control
 const STORE = 'beats-ui-v2';
 // the modifier key named in hints: cmd on Apple devices, ctrl elsewhere
 const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? 'cmd' : 'ctrl';
+// touch screens: no keyboard to name in menus, and tips about tapping and holding
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+const keys = (combo) => (TOUCH ? '' : `  (${combo})`);
 const $ = (sel, el = document) => el.querySelector(sel);
 
 // the sticky header's height as --head, so the sticky code panel sits below it
@@ -327,6 +330,49 @@ function unlockAudio() {
   const ctx = globalThis.getAudioContext?.();
   if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
 }
+
+// phones: everything else in the header, in a sheet from ⋯. Tempo, pump and
+// kit move into it while it's open (so they keep their handlers and mappings)
+const moreBtn = $('#more');
+moreBtn.addEventListener('click', () => {
+  const ctls = [...document.querySelectorAll('header > .ctl')];
+  const head = h('div', 'sheet-head');
+  const spots = ctls.map((c) => {
+    const spot = document.createComment('');
+    c.replaceWith(spot);
+    head.append(c);
+    return spot;
+  });
+  const press = (sel) => () => $(sel).click();
+  menu(moreBtn, [
+    { label: 'learn', run: () => (location.href = 'learn.html') },
+    { label: '+ samples', run: press('#add-samples') },
+    { label: $('#rec').textContent, run: press('#rec') },
+    { label: 'export', run: press('#export') },
+    { label: 'map', run: press('#map') },
+    { label: 'settings', run: press('#settings') },
+    '-',
+    { label: 'source on GitHub ↗', run: () => window.open($('header .gh').href, '_blank', 'noopener') },
+  ], {
+    head: [head],
+    label: 'more',
+    onClose: () => spots.forEach((spot, i) => spot.replaceWith(ctls[i])),
+  });
+});
+
+// phones: one view at a time (grid, song, code), each keeping its scroll
+const views = { grid: 0, song: 0, code: 0 };
+function showView(name) {
+  const root = document.documentElement;
+  if (root.dataset.tab === name) return;
+  views[root.dataset.tab] = scrollY;
+  root.dataset.tab = name;
+  for (const b of $('#tabs').children) b.setAttribute('aria-selected', b.dataset.tab === name);
+  scrollTo(0, views[name]);
+}
+for (const b of $('#tabs').children) b.addEventListener('click', () => showView(b.dataset.tab));
+// phones have no ctrl+enter: apply the edited code while it plays
+$('#apply').addEventListener('click', () => editor.evaluate());
 
 const bpm = $('#bpm');
 bpm.addEventListener('input', () => {
@@ -729,7 +775,7 @@ fileBtn.addEventListener('click', () =>
       status('new empty tune · + track to start', false, { label: 'undo', run: undo });
     } },
     '-',
-    { label: `save  (${MOD}+s)`, run: saveNow },
+    { label: `save${keys(`${MOD}+s`)}`, run: saveNow },
     { label: 'save as…', run: () => saveAsAsk(fileBtn) },
     '-',
     { label: 'download .js', run: () => download(new Blob([editor.code], { type: 'text/javascript' }), `${fileName(tuneName)}.js`) },
@@ -864,6 +910,7 @@ recBtn.addEventListener('click', async () => {
 // ── rack ──────────────────────────────────────────
 
 const rack = $('#rack');
+const mixRows = $('#mix-rows');
 const rows = new Map(); // id -> { row, kind, cells, mute, solo, inputs, chip, fx, barsTag }
 const lastNote = {}; // id -> note used when switching a step on
 
@@ -927,13 +974,55 @@ function loadColumns() {
 let columns = loadColumns();
 const knobsShown = () => columns.map((k) => CONTROLS[k]);
 
-let paint = null; // { id, on, cell } while dragging across steps
+// { id, on, cell } while dragging across steps. On touch the first step waits
+// (pending: its cell; x, y: where the finger went down) until the finger lifts
+// where it landed (a tap) or moves along the row (a paint). Anything else is a
+// scroll and sets nothing: moving more up or down than sideways, the page
+// scrolling under the finger (touch-action: pan-y), or a touch that stops a
+// scroll still gliding.
+const SLOP = 10; // px a tap may wander
+let paint = null;
 let longPress;
+let lastScroll = 0;
 const endPaint = () => {
   paint = null;
   clearTimeout(longPress);
 };
-window.addEventListener('pointerup', endPaint);
+const startPending = () => {
+  const { id, pending, on } = paint;
+  paint.pending = null;
+  setStep(id, pending, on, 'start');
+};
+const travel = (e) => ({ dx: Math.abs(e.clientX - paint.x), dy: Math.abs(e.clientY - paint.y) });
+// a pending touch moved: a scroll, a paint (then the step it's over, if it
+// left the first one before that was clear), or not clear yet. A thumb's
+// scroll often starts with a sideways drift, so a paint has to be clearly
+// sideways: more than twice as far across as up or down.
+function touchMove(e) {
+  const { dx, dy } = travel(e);
+  if (dy > SLOP && dy * 2 >= dx) return endPaint();
+  if (dx <= SLOP || dx <= dy * 2) return;
+  clearTimeout(longPress);
+  startPending();
+  if (paint.over != null && paint.over !== paint.cell) {
+    paint.cell = paint.over;
+    setStep(paint.id, paint.over, paint.on, true);
+  }
+}
+addEventListener('scroll', () => {
+  lastScroll = performance.now();
+  if (paint?.touch) endPaint();
+}, { capture: true, passive: true });
+window.addEventListener('pointermove', (e) => {
+  if (paint?.pending != null) touchMove(e);
+});
+window.addEventListener('pointerup', (e) => {
+  if (paint?.pending != null) {
+    const { dx, dy } = travel(e);
+    if (Math.max(dx, dy) <= SLOP) startPending();
+  }
+  endPaint();
+});
 window.addEventListener('pointercancel', endPaint);
 
 function buildRow(t) {
@@ -1030,27 +1119,34 @@ function buildRow(t) {
       cell.dataset.map = `step:${id}:${i}`;
       cell.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
-        e.preventDefault();
+        // mouse: no focus ring or text selection from the drag. Not touch:
+        // Safari would take that as "don't scroll" (.steps sets no selection)
+        if (e.pointerType === 'mouse') e.preventDefault();
         // touch captures the pointer to this cell; release it so a drag
         // paints across the row like a mouse does
         if (cell.hasPointerCapture?.(e.pointerId)) cell.releasePointerCapture(e.pointerId);
         const on = !track(id).steps[at(id, i)];
-        paint = { id, on, cell: i };
-        setStep(id, i, on, 'start');
-        // long-press a note step (phones have no right-click): put the step
-        // back the way it was and open the piano
+        const touch = e.pointerType !== 'mouse';
+        if (touch && performance.now() - lastScroll < 250) return; // stopping a glide
+        paint = { id, on, cell: i, pending: touch ? i : null, touch, x: e.clientX, y: e.clientY };
+        if (paint.pending == null) setStep(id, i, on, 'start');
+        // long-press a note step (phones have no right-click): the piano,
+        // the step left as it was
         if (t.kind === 'note' && e.pointerType !== 'mouse') {
           clearTimeout(longPress);
           longPress = setTimeout(() => {
             if (paint?.id !== id || paint.cell !== i) return;
-            setStep(id, i, !on, true);
             paint = null;
             openNotePicker(id, i, cell);
           }, 450);
         }
       });
-      cell.addEventListener('pointerenter', () => {
+      cell.addEventListener('pointerenter', (e) => {
         if (paint?.id !== id || paint.cell === i) return;
+        if (paint.pending != null) {
+          paint.over = i;
+          return touchMove(e);
+        }
         clearTimeout(longPress);
         paint.cell = i;
         setStep(id, i, paint.on, true);
@@ -1119,25 +1215,7 @@ function buildRow(t) {
   more.title = 'length, copy / paste this bar, rename, duplicate, delete';
   more.setAttribute('aria-label', `${id} options`);
   more.setAttribute('aria-haspopup', 'menu');
-  more.addEventListener('click', () =>
-    menu(more, [
-      ...(t.kind === 'code'
-        ? []
-        : [1, 2, 4, 8].map((n) => ({
-            label: `${track(id)?.bars === n ? '● ' : ''}length ${n} bar${n > 1 ? 's' : ''}`,
-            run: () => setLength(id, n),
-          }))),
-      ...(t.kind === 'code'
-        ? []
-        : [
-            { label: `copy bar ${barOf(track(id)) + 1}`, run: () => copyTrackBar(id) },
-            ...(trackClip ? [{ label: `paste ${trackClip.from} into bar ${barOf(track(id)) + 1}`, run: () => pasteTrackBar(id) }] : []),
-          ]),
-      { label: 'rename', run: () => startRename(id) },
-      { label: 'duplicate', run: () => duplicate(id) },
-      { label: 'delete', run: () => remove(id), danger: true },
-    ]),
-  );
+  more.addEventListener('click', () => trackMenu(id, more));
   const togs = h('div', 'togs');
   togs.append(mute, soloBtn, fx, more);
   row.append(togs);
@@ -1145,12 +1223,82 @@ function buildRow(t) {
   const { knobs, inputs } = buildKnobs(t, id);
   row.append(knobs);
 
-  return { row, kind: t.kind, cells, mute, solo: soloBtn, inputs, chip, fx, barsTag };
+  // the same sliders in the mixer (phones' song view)
+  const mix = h('div', 'mix-row');
+  const mixKnobs = buildKnobs(t, id, false);
+  mix.append(h('span', 'mix-name', id), mixKnobs.knobs);
+
+  // knobs: every set of sliders showing this track (the row's, the mixer's, an open ⋯ sheet's)
+  return { row, mix, kind: t.kind, cells, mute, solo: soloBtn, knobs: [inputs, mixKnobs.inputs], chip, fx, barsTag };
+}
+
+// a track's ⋯: length, copy / paste its bar, rename, duplicate, delete. On a
+// phone, a sheet that also has its sliders, length as one row, and its effects
+function trackMenu(id, anchor) {
+  const t = track(id);
+  const r = rows.get(id);
+  const phone = isPhone();
+  const lengths = t.kind === 'code' || phone ? [] : [1, 2, 4, 8].map((n) => ({
+    label: `${t.bars === n ? '● ' : ''}length ${n} bar${n > 1 ? 's' : ''}`,
+    run: () => setLength(id, n),
+  }));
+  const items = [
+    ...lengths,
+    ...(t.kind === 'code'
+      ? []
+      : [
+          ...(phone ? [{ label: `${r.fx.title.replace(/^add effects$/, 'effects').replace(': ', ' · ')}…`, run: () => openFx(id, anchor) }] : []),
+          { label: `copy bar ${barOf(t) + 1}`, run: () => copyTrackBar(id) },
+          ...(trackClip ? [{ label: `paste ${trackClip.from} into bar ${barOf(t) + 1}`, run: () => pasteTrackBar(id) }] : []),
+        ]),
+    { label: 'rename', run: () => startRename(id) },
+    { label: 'duplicate', run: () => duplicate(id) },
+    { label: 'delete', run: () => remove(id), danger: true },
+  ];
+  if (!phone) return menu(anchor, items);
+
+  const head = h('div', 'sheet-head');
+  head.append(h('div', 'fx-title', t.kind === 'code' ? `${id} · code` : `${id} · ${r.chip.textContent}`));
+  const sliders = buildKnobs(t, id, false);
+  head.append(sliders.knobs);
+  if (t.kind !== 'code') {
+    const len = h('div', 'sheet-len');
+    len.append(h('span', 'set-label', 'bars'));
+    const segs = [1, 2, 4, 8].map((n) => {
+      const b = h('button', 'seg', String(n));
+      b.type = 'button';
+      b.setAttribute('aria-label', `length ${n} bar${n > 1 ? 's' : ''}`);
+      b.addEventListener('click', () => {
+        setLength(id, n);
+        mark();
+      });
+      return b;
+    });
+    const mark = () => segs.forEach((b, i) => {
+      const on = track(id)?.bars === [1, 2, 4, 8][i];
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
+    });
+    mark();
+    len.append(...segs);
+    head.append(len);
+  }
+  r.knobs.push(sliders.inputs);
+  syncRow(t, r);
+  menu(anchor, items, {
+    head: [head],
+    label: `${id} options`,
+    onClose: () => r.knobs.splice(r.knobs.indexOf(sliders.inputs), 1),
+  });
 }
 
 // column headings: click one to pick what that column shows
 function renderColumns() {
-  const heads = columns.map((key, slot) => {
+  $('#columns').replaceChildren(...columnHeads());
+  $('#mix-columns').replaceChildren(...columnHeads());
+}
+function columnHeads() {
+  return columns.map((key, slot) => {
     const b = h('button', 'link col-head', CONTROLS[key].label);
     b.type = 'button';
     b.title = 'choose what this column shows';
@@ -1166,7 +1314,6 @@ function renderColumns() {
     );
     return b;
   });
-  $('#columns').replaceChildren(...heads);
 }
 
 // a control already in another column swaps places with this one
@@ -1180,9 +1327,11 @@ function setColumn(slot, key) {
     localStorage.setItem(COLUMNS_STORE, JSON.stringify(columns));
   } catch {}
   for (const [id, r] of rows) {
-    const { knobs, inputs } = buildKnobs(track(id), id);
-    r.row.querySelector('.knobs').replaceWith(knobs);
-    r.inputs = inputs;
+    const row = buildKnobs(track(id), id);
+    const mix = buildKnobs(track(id), id, false);
+    r.row.querySelector('.knobs').replaceWith(row.knobs);
+    r.mix.querySelector('.knobs').replaceWith(mix.knobs);
+    r.knobs = [row.inputs, mix.inputs];
     syncRow(track(id), r);
   }
   renderColumns();
@@ -1190,14 +1339,15 @@ function setColumn(slot, key) {
   status(`columns: ${knobsShown().map((k) => k.label).join(' · ')}`);
 }
 
-function buildKnobs(t, id) {
+// mappable: the grid's own sliders, which controllers can map; not the copies
+function buildKnobs(t, id, mappable = true) {
   const knobs = h('div', 'knobs');
   const inputs = {};
   for (const k of knobsShown()) {
     const input = h('input');
     Object.assign(input, { type: 'range', min: k.min, max: k.max, step: k.step });
     input.setAttribute('aria-label', `${id} ${k.label}`);
-    if (t.kind !== 'code') input.dataset.map = `${k.key}:${id}`;
+    if (t.kind !== 'code' && mappable) input.dataset.map = `${k.key}:${id}`;
     input.addEventListener('input', () => {
       const v = k.from(Number(input.value));
       edit(() => setParam(track(id), k.key, k.store ? k.store(v) : v, undefined, k.rest), true);
@@ -1281,22 +1431,28 @@ function render() {
   for (const [id, r] of rows) {
     if (!ids.has(id)) {
       r.row.remove();
+      r.mix.remove();
       rows.delete(id);
     }
   }
+  // DOM order = code order; only move rows that are out of place, since
+  // moving a row would blur a slider being dragged in it
+  const place = (parent, el, prev) => {
+    const want = prev ? prev.nextElementSibling : parent.firstElementChild;
+    if (el !== want) parent.insertBefore(el, want);
+  };
   let prev = null;
   for (const t of tune.tracks) {
     let r = rows.get(t.id);
     if (!r || r.kind !== t.kind) {
       const fresh = buildRow(t);
       r?.row.replaceWith(fresh.row);
+      r?.mix.replaceWith(fresh.mix);
       rows.set(t.id, (r = fresh));
     }
-    // DOM order = code order; only move rows that are out of place, since
-    // moving a row would blur a slider being dragged in it
-    const want = prev ? prev.nextElementSibling : rack.firstElementChild;
-    if (r.row !== want) rack.insertBefore(r.row, want);
-    prev = r.row;
+    place(rack, r.row, prev?.row);
+    place(mixRows, r.mix, prev?.mix);
+    prev = r;
     syncRow(t, r);
   }
   $('#empty').hidden = tune.tracks.length > 0;
@@ -1361,13 +1517,17 @@ function syncRow(t, r) {
   r.mute.title = tune.mode === 'song' ? 'song mode: scenes decide what plays'
     : !tune.mix ? 'no live mix in the code'
     : fromMixCode ? "plays from the mix's own code: mute it there" : 'mute';
-  r.row.classList.toggle('silent', tune.mode === 'song' ? !!stage && !stage.has(t.id) : !isAudible(t) || !tune.mix);
+  const silent = tune.mode === 'song' ? !!stage && !stage.has(t.id) : !isAudible(t) || !tune.mix;
+  r.row.classList.toggle('silent', silent);
+  r.mix.classList.toggle('silent', silent);
   for (const k of knobsShown()) {
-    const input = r.inputs[k.key];
     const v = t.kind === 'code' ? NaN : getParam(t, k.key, k.rest);
-    input.disabled = Number.isNaN(v);
-    input.title = input.disabled ? `${k.label}: set in code` : `${k.label} ${k.show(v ?? k.def)}`;
-    if (document.activeElement !== input) input.value = k.to(Number.isNaN(v) ? k.def : v ?? k.def);
+    for (const inputs of r.knobs) {
+      const input = inputs[k.key];
+      input.disabled = Number.isNaN(v);
+      input.title = input.disabled ? `${k.label}: set in code` : `${k.label} ${k.show(v ?? k.def)}`;
+      if (document.activeElement !== input) input.value = k.to(Number.isNaN(v) ? k.def : v ?? k.def);
+    }
   }
   if (t.kind === 'note' && !lastNote[t.id]) lastNote[t.id] = t.steps.find(Boolean) ?? 'c2';
 }
@@ -1485,9 +1645,10 @@ function shiftNote(id, cell, by, merge = false) {
 function showInCode(id) {
   const t = track(id);
   if (!t) return;
+  if (isPhone()) showView('code');
   editor.editor.dispatch({ selection: { anchor: t.range[0] }, scrollIntoView: true });
   editor.editor.focus();
-  status(`${id} is written as code: edit it in the editor, ctrl+enter to apply`);
+  status(`${id} is written as code: edit it in the editor${TOUCH ? '' : ', ctrl+enter to apply'}`);
 }
 
 // Code tracks: read their steps from the playing pattern. Every event carries
@@ -2060,6 +2221,8 @@ function openFx(id, anchor) {
 
 function startDrag(e, row) {
   if (e.button !== 0) return;
+  // touch drags from the grip only: a swipe on the name scrolls the page
+  if (e.pointerType !== 'mouse' && !e.target.closest('.grip')) return;
   e.preventDefault();
   // listen on window: moving the row in the DOM drops any pointer capture
   const id = e.pointerId;
@@ -2188,7 +2351,15 @@ function status(msg, error = false, action = null) {
 }
 
 // ? : the tips, [what to do, what it does]
-const TIPS = [
+const TIPS = TOUCH ? [
+  ['tap a step, or drag along the row', 'set them · swipe up or down to scroll'],
+  ['hold a note step', 'pick the note'],
+  ['tap a sound', 'change it · hold it to trim'],
+  ['⋯ on a track', 'its sliders, length, effects, rename'],
+  ['drag ⠿', 'reorder the tracks'],
+  ['tap a bar, then again', 'stay on it while it plays, then follow'],
+  ['song', 'scenes, the song, and the mixer'],
+] : [
   ['click or drag on steps', 'set them'],
   ['right-click a note step, or scroll on it', 'pick the note'],
   ['click a sound', 'change it · right-click it to trim'],

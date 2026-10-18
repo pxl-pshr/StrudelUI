@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-tab="grid">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -203,7 +203,8 @@
   .row.dragging { background: var(--panel); outline: 1px solid var(--line); border-radius: 4px; position: relative; z-index: 1; }
   .row.dragging .grip { opacity: 1; color: var(--accent); }
 
-  .steps { display: flex; gap: var(--gap); touch-action: none; } /* drag paints instead of scrolling */
+  /* a drag along a row paints; up or down scrolls the page (app.js: touch waits to see which) */
+  .steps { display: flex; gap: var(--gap); touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .steps > * { flex: 0 0 var(--step); }
   .step:nth-child(4n+1):not(:first-child) { margin-left: 6px; }
   .rack-head .steps span:nth-child(4n+1):not(:first-child) { margin-left: 6px; }
@@ -411,28 +412,114 @@
      bar, undo and loop/song rows stay next to the grid on wide screens */
   :root[data-layout="below"] .rack-wrap { border-right: 0; border-bottom: 0; overflow-x: auto; width: max-content; max-width: 100%; }
   :root[data-layout="below"] .code-wrap { position: static; max-height: none; border-top: 1px solid var(--line); }
+  /* phone-only pieces: the ⋯ overflow, the mixer, apply, the view tabs */
+  #more, .mixer, #apply, .tabs { display: none; }
   @media (max-width: 760px) {
-    header, .rack-wrap, .code-head { padding-left: 16px; padding-right: 16px; }
+    /* one row: logo, tune name (the file menu), play, ⋯ (everything else) */
+    header { flex-wrap: nowrap; gap: 8px; padding: 8px 12px; }
+    h1 { font-size: 0; margin: 0; } /* the logo alone; the name stays for screen readers */
+    header > .ctl, header > .link, header > .gh, #save { display: none; }
+    .file-btn { flex: 1 1 auto; min-width: 0; max-width: none; height: 40px; }
+    #play { height: 40px; min-width: 76px; }
+    #more {
+      display: block; width: 40px; height: 40px; padding: 0; border-radius: 4px; cursor: pointer;
+      background: none; border: 1px solid var(--line); color: var(--text); font-size: 16px;
+    }
+    body:has(#rec.live) #more { color: var(--err); border-color: var(--err); } /* recording */
+
+    /* the views, one at a time, switched in the bar at the bottom */
+    body { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
+    .tabs {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+      background: var(--bg); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tabs button {
+      flex: 1; height: 52px; border: 0; background: none; cursor: pointer; color: var(--dim);
+      border-top: 2px solid transparent; margin-top: -1px;
+    }
+    .tabs button[aria-selected="true"] { color: var(--text); border-top-color: var(--accent); }
+    :root[data-tab="grid"] :is(.arrange, .mixer, .code-wrap),
+    :root[data-tab="song"] :is(.pager, #rack, .rack-foot, #empty, .code-wrap),
+    :root[data-tab="code"] .rack-wrap > :not(#status):not(.sr-only) { display: none; }
+    :root[data-tab="code"] .rack-wrap { padding: 0; border: 0; }
+    main { display: block; }
+    .rack-wrap { border: 0; }
+    /* messages float under the header, wherever the view is scrolled */
+    #status {
+      position: fixed; z-index: 25; top: calc(var(--head, 56px) + 6px); left: 12px; right: 12px;
+      min-height: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    }
+    #status:empty { display: none; }
+    .status-action { padding: 4px 2px; }
+
+    .rack-wrap, .code-head { padding-left: 16px; padding-right: 16px; }
     :root[data-layout="below"] .rack-wrap { width: auto; } /* phone rows are fluid: fill the screen */
+    :root[data-layout="below"] .code-wrap { border-top: 0; }
     #editor { padding: 0 0 16px; }
+    #dirty .keys { display: none; } /* no keyboard: an apply button instead */
+    #apply { display: inline; color: var(--accent); padding: 8px 4px; }
+
+    /* tracks: name, sound and M S ⋯ on one line, the steps under them */
     .rack-head { display: none; }
     .row {
-      grid-template-columns: 1fr max-content; row-gap: 6px; padding: 8px 0;
+      grid-template-columns: minmax(0, 1fr) max-content; row-gap: 4px; padding: 6px 0 10px;
       border-bottom: 1px solid var(--line);
     }
+    .who { flex-direction: row; align-items: center; gap: 10px; }
+    .who .name { flex: none; max-width: 55%; }
+    .chip { padding: 10px 0; font-size: 11px; min-width: 0; }
+    /* only the grip drags; a swipe on the name scrolls */
+    .name { touch-action: pan-y; cursor: default; }
+    .grip { touch-action: none; padding: 10px 8px 10px 0; opacity: .6; }
     .steps { grid-column: 1 / -1; grid-row: 2; }
-    .togs { grid-column: 2; grid-row: 1; }
-    .knobs { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); }
+    .togs { grid-column: 2; grid-row: 1; gap: 6px; }
+    .row .tog.fx, .row > .knobs { display: none; } /* effects and sliders: in ⋯, and the mixer */
     /* two rows of eight, sized from the row itself: steps big enough to hit with a finger */
     .steps { flex-wrap: wrap; row-gap: var(--gap); }
     .steps > .step { flex: 0 0 calc((100% - 6px - 7 * var(--gap)) / 8); height: auto; aspect-ratio: 1; }
     .steps > .step:nth-child(9):not(:first-child) { margin-left: 0; } /* row 2 starts flush */
     .step { font-size: 10px; }
-    .tog, .page { min-width: 30px; height: 30px; }
-    .knob-cap { display: block; font-size: 10px; color: var(--dim); }
-    input[type=range] { height: 28px; }
-    input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -8px; }
-    input[type=range]::-moz-range-thumb { width: 18px; height: 18px; }
+    .tog { width: 36px; height: 36px; font-size: 12px; }
+    .page { min-width: 36px; height: 36px; }
+    .pager, .rack-foot { gap: 10px 14px; }
+    .pager .link, .rack-foot .link { padding: 8px 2px; }
+
+    /* song view: scenes, the song, then the mixer */
+    .arrange { padding-top: 4px; margin-top: 0; border-top: 0; gap: 12px; }
+    .arr-label { width: 100%; }
+    .scene, .entry, .scene-more, .seg { height: 36px; padding: 0 12px; }
+    .scene-more { padding: 0 10px; }
+    .arr-row > .link { padding: 8px 4px; }
+    .mixer { display: block; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .mix-head, .mix-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; column-gap: 10px; }
+    .mix-head { color: var(--dim); padding-bottom: 4px; }
+    .mix-head .col-head { padding: 8px 0; }
+    .mix-row { padding: 2px 0; transition: opacity .15s; }
+    .mix-row.silent { opacity: .35; }
+    .mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .knobs { grid-template-columns: repeat(3, 1fr); }
+
+    /* sheets: finger-sized rows */
+    .menu-item { padding: 12px; }
+    .pop.sheet { max-height: calc(100% - var(--head, 56px) - 16px); overflow-y: auto; }
+    .sheet-head { display: grid; gap: 4px; padding: 8px 12px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+    .sheet-head .fx-title { padding: 0 0 4px; }
+    .sheet-head .knobs { grid-template-columns: 1fr; gap: 0; }
+    .sheet-head .knob { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; }
+    .sheet-head .knob-cap { display: block; color: var(--dim); }
+    .sheet-head .ctl { justify-content: space-between; min-height: 44px; }
+    .sheet-head #pump { width: 60%; }
+    .sheet-head #kit { max-width: 60%; }
+    .sheet-len { display: flex; align-items: center; gap: 0; min-height: 44px; }
+    .sheet-len .set-label { width: 64px; flex: none; margin-right: 10px; }
+    .sheet-len .seg { border-radius: 0; flex: 1; }
+    .sheet-len .seg + .seg { border-left: 0; }
+    .sheet-len .seg:nth-child(2) { border-radius: 3px 0 0 3px; }
+    .sheet-len .seg:last-child { border-radius: 0 3px 3px 0; }
+    input[type=range] { height: 36px; }
+    input[type=range]::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -9px; }
+    input[type=range]::-moz-range-thumb { width: 20px; height: 20px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
@@ -445,6 +532,7 @@
   <button id="file" class="file-btn" type="button" title="save, open, download">untitled ▾</button>
   <button id="save" class="link" type="button" title="save this tune in the browser (cmd+s) · open, download and more in the menu on the left">save</button>
   <button id="play" data-map="play" disabled>loading…</button>
+  <button id="more" type="button" title="tempo, kit, samples, record, export, settings" aria-label="more">⋯</button>
   <label class="ctl">bpm <input id="bpm" data-map="bpm" type="number" min="40" max="240" step="1"></label>
   <label class="ctl" id="pump-ctl">pump <input id="pump" data-map="pump" type="range" min="0" max="1" step="0.01"></label>
   <label class="ctl">kit <select id="kit"><option value="">—</option></select></label>
@@ -476,19 +564,29 @@
       <button id="help" class="link" type="button" title="tips" aria-label="tips" aria-haspopup="dialog">?</button>
     </div>
     <div id="arrange" class="arrange"></div>
+    <div id="mixer" class="mixer">
+      <div class="mix-head"><span>mixer</span><div class="knobs" id="mix-columns"></div></div>
+      <div id="mix-rows"></div>
+    </div>
     <div id="empty" hidden>No tracks yet: add one with <b>+ track</b>, or in the code as <code>const name = …</code> listed in <code>stack(…)</code>.</div>
     <div id="announce" class="sr-only" role="status" aria-live="polite"></div>
     <div id="status"></div>
   </section>
   <section class="code-wrap">
     <div class="code-head">
-      <span>code <em id="dirty" hidden>· ctrl+enter to apply</em></span>
+      <span>code <em id="dirty" hidden>· <span class="keys">ctrl+enter to apply</span><button id="apply" class="link" type="button">apply</button></em></span>
       <button id="copy" class="link">copy</button>
       <button id="open" class="link" type="button" title="open this tune on strudel.cc">open in strudel ↗</button>
     </div>
     <div id="editor"></div>
   </section>
 </main>
+<!-- phones: one view at a time -->
+<nav id="tabs" class="tabs" role="tablist" aria-label="views">
+  <button type="button" role="tab" data-tab="grid" aria-selected="true">grid</button>
+  <button type="button" role="tab" data-tab="song" aria-selected="false">song</button>
+  <button type="button" role="tab" data-tab="code" aria-selected="false">code</button>
+</nav>
 <script type="module" src="app.js"></script>
 </body>
 </html>
