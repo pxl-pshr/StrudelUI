@@ -360,7 +360,16 @@
 
   /* code */
   /* pinned below the sticky header: --head is its height (app.js keeps it current) */
-  .code-wrap { min-width: 0; position: sticky; top: var(--head, 0px); max-height: calc(100vh - var(--head, 0px)); display: flex; flex-direction: column; }
+  .code-wrap { min-width: 0; position: sticky; top: var(--head, 0px); max-height: calc(100vh - var(--head, 0px)); display: flex; flex-direction: column; isolation: isolate; }
+  /* Hydra's canvas (await initHydra(); app.js moves it here from <body>): behind
+     the code, filling the panel, instead of fixed over the whole window */
+  .code-wrap > #hydra-canvas { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: -1; }
+  /* while it runs: the panel at least a screen tall, the editor's own background
+     (StrudelMirror's inline style) clear, and each line on a translucent backing */
+  .code-wrap:has(> #hydra-canvas) { min-height: calc(100vh - var(--head, 0px)); }
+  .code-wrap:has(> #hydra-canvas) #editor div:has(> .cm-editor) { background-color: transparent !important; }
+  .code-wrap:has(> #hydra-canvas) #editor .cm-line { width: fit-content; max-width: 100%; }
+  .code-wrap:has(> #hydra-canvas) :is(#editor .cm-line, #editor .cm-gutterElement, .code-head) { background: color-mix(in srgb, var(--bg) 72%, transparent); }
   .code-head {
     display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 16px 20px 8px; color: var(--dim);
   }
@@ -404,14 +413,14 @@
   @media (max-width: 1180px) {
     main { grid-template-columns: minmax(0, 1fr); }
     .rack-wrap { border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
-    .code-wrap { position: static; max-height: none; }
+    .code-wrap { position: relative; top: 0; max-height: none; }
   }
   /* settings → layout: below puts the code under the sequencer at any width */
   :root[data-layout="below"] main { grid-template-columns: minmax(0, 1fr); }
   /* the rack only as wide as its tracks, so the controls aligned right in the
      bar, undo and loop/song rows stay next to the grid on wide screens */
   :root[data-layout="below"] .rack-wrap { border-right: 0; border-bottom: 0; overflow-x: auto; width: max-content; max-width: 100%; }
-  :root[data-layout="below"] .code-wrap { position: static; max-height: none; border-top: 1px solid var(--line); }
+  :root[data-layout="below"] .code-wrap { position: relative; top: 0; max-height: none; border-top: 1px solid var(--line); }
   /* phone-only pieces: the ⋯ overflow, the mixer, apply, the view tabs */
   #more, .mixer, #apply, .tabs { display: none; }
   @media (max-width: 760px) {

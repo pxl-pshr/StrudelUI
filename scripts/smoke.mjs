@@ -736,6 +736,45 @@ try {
     return 'held through open and reload, runs on play';
   });
 
+  await check('Hydra\'s canvas goes behind the code panel at its size, and goes when the code stops using it or another tune opens', async () => {
+    // a stand-in for the canvas initHydra() adds to <body> (the real one loads hydra-synth from unpkg)
+    const r = await page(`
+      const c = document.createElement('canvas');
+      c.id = 'hydra-canvas';
+      c.width = innerWidth;
+      c.height = innerHeight;
+      c.style = 'pointer-events:none;width:100%;height:100%;position:fixed;top:0;left:0';
+      document.body.prepend(c);
+      await new Promise((r) => setTimeout(r, 100));
+      const panel = document.querySelector('.code-wrap');
+      const box = c.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+      const out = {
+        inPanel: c.parentElement === panel,
+        size: [c.width, c.height].join() === [panel.clientWidth, panel.clientHeight].join(),
+        covers: Math.abs(box.left - p.left) < 2 && Math.abs(box.width - p.width) < 2,
+        behind: getComputedStyle(c).zIndex === '-1',
+      };
+      // evaluating code without initHydra() clears it; so does opening another tune
+      const ed = document.querySelector('strudel-editor').editor;
+      await ed.repl.evaluate(ed.code, false);
+      out.clearedByEval = !document.getElementById('hydra-canvas');
+      document.body.prepend(c);
+      await new Promise((r) => setTimeout(r, 50));
+      const before = ed.code;
+      document.querySelector('#file').click();
+      await new Promise((r) => setTimeout(r, 100));
+      [...document.querySelectorAll('.menu-item')].find((b) => b.textContent.startsWith('new')).click();
+      await new Promise((r) => setTimeout(r, 300));
+      out.clearedByNew = !document.getElementById('hydra-canvas');
+      document.querySelector('#undo').click();
+      await new Promise((r) => setTimeout(r, 300));
+      out.restored = ed.code === before;
+      c.remove();
+      return out;`);
+    for (const [k, ok] of Object.entries(r)) if (!ok) throw new Error(`${k}: ${JSON.stringify(r)}`);
+  });
+
   // ── phones ──
   await check('phone: views, the track sheet, and touch on steps (tap sets, a drag paints, scrolls don\'t)', async () => {
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });

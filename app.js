@@ -85,9 +85,15 @@ $('#editor').append(host);
 const editor = host.editor;
 applyEditorSettings(editor);
 editor.setFontFamily('ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace');
+// Hydra (await initHydra()) keeps drawing until clearHydra(), which Strudel
+// never calls itself: the visuals belong to the code that started them
+const startsHydra = (src) => /\binitHydra\s*\(/.test(src.replace(/\/\/.*$/gm, ''));
+const stopHydra = () => {
+  if (document.getElementById('hydra-canvas')) globalThis.clearHydra?.();
+};
 // Every evaluate of this editor goes through repl.evaluate (play, ctrl+enter,
 // export, record, and preview, which skips held tunes): one that runs releases
-// a held tune.
+// a held tune, and one whose code no longer starts Hydra clears it.
 {
   const evaluate = editor.repl.evaluate;
   editor.repl.evaluate = (...args) => {
@@ -95,9 +101,42 @@ editor.setFontFamily('ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas
       held = false;
       save();
     }
+    if (typeof args[0] === 'string' && !startsHydra(args[0])) stopHydra();
     return evaluate(...args);
   };
 }
+// Hydra (await initHydra() in the code) adds a full-window canvas to <body>,
+// over the whole app. Move it into the code panel (the stylesheet puts it behind
+// the code) and render at the panel's size, so the picture isn't stretched.
+// Strudel's own resize handler sets the canvas back to the window's size 200 ms
+// after a resize: fitting runs after that.
+{
+  const panel = $('.code-wrap');
+  const fit = () => {
+    const c = document.getElementById('hydra-canvas');
+    if (c?.parentElement !== panel) return;
+    const w = Math.max(1, panel.clientWidth);
+    const h = Math.max(1, panel.clientHeight);
+    c.width = w;
+    c.height = h;
+    globalThis.setResolution?.(w, h); // hydra-synth's global, once Hydra has started
+  };
+  let timer;
+  const fitLater = () => {
+    clearTimeout(timer);
+    timer = setTimeout(fit, 300);
+  };
+  // before Hydra starts: it takes its size from the canvas
+  new MutationObserver(() => {
+    const c = document.getElementById('hydra-canvas');
+    if (!c || c.parentElement === panel) return;
+    panel.prepend(c);
+    fit();
+  }).observe(document.body, { childList: true });
+  new ResizeObserver(fitLater).observe(panel);
+  addEventListener('resize', fitLater);
+}
+
 // When the code scrolls with the page (layout below, narrow windows), keep the
 // caret out from under the sticky header: CodeMirror's scrollMargins. The
 // bundle doesn't export EditorView or StateEffect, so both come from the view.
@@ -615,6 +654,7 @@ const showName = () => {
 
 // replace the whole tune (undoable like any edit)
 function loadTune(src, meta = {}) {
+  stopHydra(); // another tune: the last one's visuals go (this one's start when it runs)
   syncFromCode();
   remember(code);
   lastChange = 0;
