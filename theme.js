@@ -14,8 +14,12 @@ try {
   if (saved in THEME_COLOR) applyTheme(saved);
 } catch {}
 
-// the saved layout too (settings.js: code beside or below the sequencer), so
-// the page doesn't jump after it loads
-try {
-  if (JSON.parse(localStorage.getItem('strudelui-settings'))?.layout === 'below') document.documentElement.dataset.layout = 'below';
-} catch {}
+// the layout too (settings.js: code below the sequencer, the default, or beside
+// it), so the page doesn't jump after it loads
+{
+  let layout = 'below';
+  try {
+    layout = JSON.parse(localStorage.getItem('strudelui-settings'))?.layout ?? layout;
+  } catch {}
+  if (layout === 'below') document.documentElement.dataset.layout = 'below';
+}

@@ -325,15 +325,16 @@ test('soundsIn finds bank-qualified sounds, through constants, other chains and 
 
 test('forStrudel: the duck lists keep only orbits a playing track uses', () => {
   const lines = (c) => c.split('\n').filter((l) => /\.duck/.test(l)).map((l) => l.trim());
+  // the default tune plays its song: the scenes play orbit 5 too, so the lists stay
+  assert.equal(parse(DEFAULT_TUNE).mode, 'song');
+  assert.equal(forStrudel(DEFAULT_TUNE), DEFAULT_TUNE);
   // loop: perc, stab and stab2 (orbit 5) are muted, so orbit 5 goes; nothing else changes
-  const out = forStrudel(DEFAULT_TUNE);
-  assert.deepEqual(lines(out), ['.duckorbit("2")', '.duckdepth(".46")', '.duckattack(".01")']);
-  assert.equal(out.split('\n').filter((l, i) => l !== DEFAULT_TUNE.split('\n')[i]).length, 3);
-  // song: the scenes play orbit 5 too, so the lists stay
   const t = parse(DEFAULT_TUNE);
-  setMode(t, 'song');
-  const song = generate(t);
-  assert.equal(forStrudel(song), song);
+  setMode(t, 'loop');
+  const loop = generate(t);
+  const out = forStrudel(loop);
+  assert.deepEqual(lines(out), ['.duckorbit("2")', '.duckdepth(".46")', '.duckattack(".01")']);
+  assert.equal(out.split('\n').filter((l, i) => l !== loop.split('\n')[i]).length, 3);
   // every orbit playing: unchanged
   assert.equal(forStrudel(TUNE), TUNE);
 });

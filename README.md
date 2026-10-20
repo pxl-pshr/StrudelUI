@@ -22,11 +22,11 @@ A PXLPSHR project.
 - **Tracks:** add drum / bass / chord / code / sample tracks, rename, duplicate, reorder, delete.
   Per-track effects: pump, delay, distort, crush, coarse, phaser, low cut, pan, stereo, swing.
 - **Mixer:** three slider columns per track (gain, high cut, space by default; click a heading to choose).
-- **Settings:** theme (the default, or strudel.cc's own colours), layout (code beside or below the
-  sequencer), audio output device (Chrome and Edge), code font size, code helpers (autocomplete with
-  docs, docs on ctrl+hover, bracket matching, line wrapping) and editor keys (codemirror, vim, emacs,
-  vscode), under **settings** in the header; kept in this browser. **Reset everything** there
-  (after a confirm) deletes all StrudelUI data in this browser.
+- **Settings:** theme (the default, or strudel.cc's own colours), layout (code below the sequencer, the
+  default, or beside it), audio output device (Chrome and Edge), code font size, code helpers
+  (autocomplete with docs, docs on ctrl+hover, bracket matching, line wrapping) and editor keys
+  (codemirror, vim, emacs, vscode), under **settings** in the header; kept in this browser. **Reset
+  everything** there (after a confirm) deletes all StrudelUI data in this browser.
 - **Bars and songs:** 1–16 bars per track (shorter ones loop), copy and paste bars (all tracks from the
   bar row, or one track from its **⋯** menu, also between drum and note tracks),
   scenes (`stack(…)`) and a song (`arrange(…)`) that plays them in order, each for any number of bars.

@@ -421,8 +421,28 @@
      bar, undo and loop/song rows stay next to the grid on wide screens */
   :root[data-layout="below"] .rack-wrap { border-right: 0; border-bottom: 0; overflow-x: auto; width: max-content; max-width: 100%; }
   :root[data-layout="below"] .code-wrap { position: relative; top: 0; max-height: none; border-top: 1px solid var(--line); }
-  /* phone-only pieces: the ⋯ overflow, the mixer, apply, the view tabs */
+  /* phone-only pieces: the ⋯ overflow, the mixer, apply, the view tabs. The
+     mixer also shows at middle widths (below) */
   #more, .mixer, #apply, .tabs { display: none; }
+  .mixer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .mix-head, .mix-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; column-gap: 10px; }
+  .mix-head { color: var(--dim); padding-bottom: 4px; }
+  .mix-head .col-head { padding: 8px 0; }
+  .mix-row { padding: 2px 0; transition: opacity .15s; }
+  .mix-row.silent { opacity: .35; }
+  .mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mixer .knobs { grid-template-columns: repeat(3, 1fr); }
+  /* middle widths (tablets, car screens, narrow windows): a track row with its
+     sliders needs about 1050 px. The sliders move to the mixer under the scenes,
+     and the steps shrink a little where even the rest doesn't fit */
+  @media (min-width: 761px) and (max-width: 1120px) {
+    .row > .knobs, .rack-head > .knobs { display: none; }
+    /* the steps' full width (16 steps, their gaps, 3 beat gaps) when there's room */
+    .row, .rack-head { grid-template-columns: 150px minmax(0, calc(16 * var(--step) + 15 * var(--gap) + 18px)) 116px; justify-content: start; }
+    .steps > * { flex: 0 1 var(--step); min-width: 0; }
+    .step { height: auto; aspect-ratio: 1; }
+    .mixer { display: block; max-width: 640px; }
+  }
   @media (max-width: 760px) {
     /* one row: logo, tune name (the file menu), play, ⋯ (everything else) */
     header { flex-wrap: nowrap; gap: 8px; padding: 8px 12px; }
@@ -500,13 +520,7 @@
     .scene, .entry, .scene-more, .seg { height: 36px; padding: 0 12px; }
     .scene-more { padding: 0 10px; }
     .arr-row > .link { padding: 8px 4px; }
-    .mixer { display: block; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
-    .mix-head, .mix-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; column-gap: 10px; }
-    .mix-head { color: var(--dim); padding-bottom: 4px; }
-    .mix-head .col-head { padding: 8px 0; }
-    .mix-row { padding: 2px 0; transition: opacity .15s; }
-    .mix-row.silent { opacity: .35; }
-    .mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mixer { display: block; }
     .knobs { grid-template-columns: repeat(3, 1fr); }
 
     /* sheets: finger-sized rows */

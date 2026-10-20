@@ -665,7 +665,7 @@ try {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const ed = document.querySelector('strudel-editor').editor;
       const before = ed.code;
-      const widgets = () => [...document.querySelector('#editor .cm-content').children].filter((c) => !c.classList.contains('cm-line')).length;
+      const widgets = () => [...document.querySelector('#editor .cm-content').children].filter((c) => !c.classList.contains('cm-line') && !c.classList.contains('cm-gap')).length;
       const out = {};
       try {
         document.querySelector('#file').click();
@@ -674,8 +674,16 @@ try {
         await wait(200);
         [...document.querySelectorAll('.menu .menu-item')].find((b) => b.textContent === 'visuals demo').click();
         await wait(1500);
+        document.querySelector('#editor').scrollIntoView();
         document.querySelector('#play').click();
-        for (let i = 0; i < 40 && widgets() < 6; i++) await wait(100);
+        // CodeMirror draws only the lines near the view (the rest is a gap), so
+        // count once the number settles: all 6, or as many as are drawn
+        let last = -1;
+        for (let i = 0, still = 0; i < 60 && widgets() < 6 && still < 10; i++) {
+          await wait(100);
+          still = widgets() === last && last >= 3 ? still + 1 : 0;
+          last = widgets();
+        }
         out.before = widgets();
         const slider = [...document.querySelectorAll('#rack .row')].find((r) => r.textContent.includes('lead')).querySelectorAll('input[type=range]')[1];
         const counts = [];
@@ -689,6 +697,7 @@ try {
         out.changed = ed.code !== before;
       } finally {
         if (ed.repl.scheduler.started) document.querySelector('#play').click();
+        scrollTo(0, 0);
         await wait(300);
         for (let i = 0; i < 20 && ed.code !== before; i++) {
           document.querySelector('#undo').click();
@@ -696,7 +705,7 @@ try {
         }
       }
       return out;`);
-    if (!(r.before >= 6)) throw new Error(`only ${r.before} widgets drew`);
+    if (!(r.before >= 3)) throw new Error(`only ${r.before} widgets drew`);
     if (!r.changed) throw new Error("the slider didn't change the code");
     if (r.during < r.before) throw new Error(`widgets dropped from ${r.before} to ${r.during} during the drag`);
     return `${r.before} widgets, ${r.during} during the drag`;
@@ -773,6 +782,31 @@ try {
       c.remove();
       return out;`);
     for (const [k, ok] of Object.entries(r)) if (!ok) throw new Error(`${k}: ${JSON.stringify(r)}`);
+  });
+
+  await check('middle widths (tablets, car screens): track rows fit, their sliders in the mixer', async () => {
+    try {
+      const out = [];
+      for (const width of [860, 780]) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height: 700, deviceScaleFactor: 1, mobile: false });
+        await new Promise((r) => setTimeout(r, 300));
+        out.push(await page(`
+          const rw = document.querySelector('.rack-wrap');
+          const step = document.querySelector('#rack .row .step').getBoundingClientRect();
+          return {
+            width: ${width},
+            overflow: rw.scrollWidth - rw.clientWidth,
+            square: Math.abs(step.width - step.height) < 1,
+            togs: new Set([...document.querySelectorAll('#rack .row .togs')].map((t) => Math.round(t.getBoundingClientRect().left))).size,
+            mixer: document.querySelectorAll('#mix-rows .mix-row').length > 0 && !!document.querySelector('#mixer').getClientRects().length,
+          };`));
+      }
+      const bad = out.filter((r) => r.overflow > 0 || !r.square || r.togs !== 1 || !r.mixer);
+      if (bad.length) throw new Error(JSON.stringify(bad));
+      return '860 and 780 px wide';
+    } finally {
+      await send('Emulation.clearDeviceMetricsOverride');
+    }
   });
 
   // ── phones ──

@@ -135,7 +135,7 @@ const song = arrange(
   [8, outro3],
 )
 
-stack(
+const mix = stack(
   kick,
   sub,
   toms,
@@ -148,4 +148,6 @@ stack(
   // stab,
   // stab2,
 )
+
+song
 `;
