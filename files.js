@@ -41,12 +41,13 @@ export function deleteTune(name) {
 
 export const fileName = (name) => `${name.trim().replace(/[^\w.-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '') || 'tune'}`;
 
-// pick a tune: .js / .txt / .strudel, or a .zip from "download with samples"
+// pick a tune: .js / .txt / .strudel, a .zip from "download with samples", or
+// a MIDI file (midi.js)
 export function pickFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.js,.txt,.strudel,.zip,text/plain,text/javascript,application/zip';
+    input.accept = '.js,.txt,.strudel,.zip,.mid,.midi,text/plain,text/javascript,application/zip,audio/midi,audio/x-midi';
     input.addEventListener('change', () => resolve(input.files[0] ?? null));
     input.click();
   });

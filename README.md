@@ -35,6 +35,10 @@ A PXLPSHR project.
   tune and the imported samples it uses; start a new empty tune. The code's first line is its title (`// name`).
   A tune opened from a link, a file or a zip is code someone else wrote: it doesn't run until you press play
   (or ctrl+enter), so tracks written in plain code show their steps from then on.
+- **MIDI files:** open or drop a `.mid` to make it a new tune. Drums (channel 10) become one drum track per
+  sound on the kit you have picked, other parts note tracks on Strudel's General MIDI sounds (`gm_…`), and
+  a chord part a few tracks, one per voice (up to 4). Notes move to the nearest 16th; velocity, pitch bends
+  and tempo changes aren't kept, and the grid holds the first 16 bars. The status line says what changed.
 - **Demos:** file → demos… opens **stab - pxlpshr** (the tune a first visit opens) and the tunes in `demos/`.
   **visuals demo** uses every visual Strudel draws inside the code: `_scope`, `_punchcard`, `_spiral`,
   `_pianoroll`, `_pitchwheel`, `_spectrum` and `markcss`.
@@ -172,6 +176,7 @@ A weekly GitHub Action opens a pull request when a newer release is out; merge i
 | `controllers.js` | MIDI and keyboard mapping (map mode, mappings file) |
 | `export.js`, `render.html`, `render.js` | mix/stem export (rendered in a throwaway frame) and live recording |
 | `files.js` | saved tunes, opening `.js` / `.strudel` / `.zip` tune files |
+| `midi.js` | reading MIDI files and turning them into a tune |
 | `zip.js` | writing and reading zips (stems, tunes with their samples) |
 | `default.js` | the tune a first visit opens |
 | `demos/` | the tunes in file → demos… (add one to `DEMOS` in `app.js`) |

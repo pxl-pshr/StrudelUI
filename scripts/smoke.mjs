@@ -809,6 +809,43 @@ try {
     }
   });
 
+  await check('a dropped MIDI file opens as a tune of grid tracks, and undo brings the last one back', async () => {
+    const r = await page(`
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const ed = document.querySelector('strudel-editor').editor;
+      const before = ed.code;
+      // 120 bpm, 96 ticks a beat: a kick on each beat, and a held two-note chord (program 33, a bass)
+      const vlq = (n) => { const o = [n & 127]; while ((n >>= 7)) o.unshift((n & 127) | 128); return o; };
+      const u32 = (n) => [n >>> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255];
+      const track = (ev) => { const b = ev.flatMap(([dt, ...e]) => [...vlq(dt), ...e]).concat(0, 255, 47, 0); return [77, 84, 114, 107, ...u32(b.length), ...b]; };
+      const bytes = [77, 84, 104, 100, ...u32(6), 0, 1, 0, 2, 0, 96,
+        ...track([[0, 0x99, 36, 100], [24, 36, 0], [72, 36, 100], [24, 36, 0], [72, 36, 100], [24, 36, 0], [72, 36, 100], [24, 36, 0]]),
+        ...track([[0, 0xc0, 33], [0, 0x90, 40, 90], [0, 47, 90], [96, 0x80, 40, 0], [0, 47, 0]])];
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], 'groove.mid', { type: 'audio/midi' }));
+      window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      await wait(800);
+      const out = {
+        title: document.title,
+        rows: [...document.querySelectorAll('#rack .row')].map((x) => x.dataset.id + (x.querySelector('.step.ro') ? ':code' : '')),
+        kick: [...document.querySelectorAll('#rack .row[data-id="kick"] .step')].map((c) => (c.classList.contains('on') ? 1 : 0)).join(''),
+        missing: document.querySelectorAll('.chip .miss').length,
+        status: document.querySelector('#announce').textContent,
+      };
+      document.querySelector('#undo').click();
+      await wait(400);
+      out.restored = ed.code === before;
+      return out;`);
+    if (r.title !== 'groove · strudelUI') throw new Error(`title: ${r.title}`);
+    if (r.rows.join() !== 'kick,bass,bass2') throw new Error(`tracks: ${r.rows.join()}`);
+    if (r.kick !== '1000100010001000') throw new Error(`kick steps: ${r.kick}`);
+    if (r.missing) throw new Error(`${r.missing} sounds missing · ${r.status}`);
+    if (!r.status.includes('chords split into bass + bass2')) throw new Error(`status: ${r.status}`);
+    if (!r.restored) throw new Error("undo didn't bring the last tune back");
+    if (errors.length) throw new Error(errors[0]);
+    return r.status.slice(0, 70);
+  });
+
   // ── phones ──
   await check('phone: views, the track sheet, and touch on steps (tap sets, a drag paints, scrolls don\'t)', async () => {
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });

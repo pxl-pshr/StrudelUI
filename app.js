@@ -15,6 +15,7 @@ import { collect, renderMix, renderStems, fitsInMemory, wav, peakDb, startRecord
 import { zip } from './zip.js';
 import { listTunes, getTune, saveTune, deleteTune, fileName, pickFile, readTuneFile, isZip } from './files.js';
 import { initControllers, mark as markControls, renameMappings } from './controllers.js';
+import { isMidi, readMidi, midiToTune } from './midi.js';
 
 const STORE = 'beats-ui-v2';
 // the modifier key named in hints: cmd on Apple devices, ctrl elsewhere
@@ -516,8 +517,8 @@ window.addEventListener('drop', async (e) => {
   dragDepth = 0;
   document.body.classList.remove('dropping');
   const list = await filesFromDrop(e.dataTransfer);
-  // a tune file (.js, or a .zip from "download with samples") opens; audio goes to the user samples
-  const tune = list.find(({ file }) => isZip(file) || /\.(js|strudel)$/i.test(file.name));
+  // a tune file (.js, a .zip from "download with samples", or MIDI) opens; audio goes to the user samples
+  const tune = list.find(({ file }) => isZip(file) || isMidi(file) || /\.(js|strudel)$/i.test(file.name));
   if (tune) openTuneFile(tune.file);
   else takeFiles(list);
 });
@@ -576,6 +577,7 @@ async function renameCheck(before, after, renames) {
 
 // a .js tune, or a .zip with the tune and its samples (imported first)
 async function openTuneFile(file) {
+  if (isMidi(file)) return openMidiFile(file);
   try {
     const f = await readTuneFile(file);
     if (f.code == null) { // samples only: an ordinary import, takeFiles says what it added
@@ -618,6 +620,36 @@ async function openTuneFile(file) {
     }
     loadTune(code, { name: f.name, held: true });
     openedStatus(`opened ${f.name}${sounds.length ? ` with its samples (${sounds.join(', ')})` : ''}${notes}`, warn);
+  } catch (err) {
+    status(`couldn't open ${file.name}: ${err.message ?? err}`, true);
+  }
+}
+
+// a MIDI file as a new tune (midi.js): drums on the kit picked now, the other
+// parts on General MIDI sounds, and what had to change to fit the grid
+async function openMidiFile(file) {
+  const name = file.name.replace(/\.midi?$/i, '');
+  try {
+    await editor.prebaked; // Strudel's names are known, so no track takes one
+    const { code: src, report: r } = midiToTune(readMidi(await file.arrayBuffer()), {
+      name,
+      kit: kit.value,
+      hasKit: (snd) => hasSound(snd, kit.value),
+      isFree: (id) => IDENT.test(id) && !RESERVED.has(id) && !(id in globalThis),
+    });
+    loadTune(src, { name });
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const notes = [
+      ...r.split.map((ids) => `chords split into ${ids.join(' + ')}`),
+      ...(r.moved ? [`${plural(r.moved, 'note')} moved to the nearest 16th`] : []),
+      ...(r.dropped ? [`${plural(r.dropped, 'note')} left out (more than 4 at once)`] : []),
+      ...(r.fileBars > r.bars ? [`its first ${r.bars} of ${r.fileBars} bars (the grid's most)`] : []),
+      ...(r.timeSig.join('/') !== '4/4' ? [`its ${r.timeSig.join('/')} laid out in 4/4 bars`] : []),
+    ];
+    openedStatus(
+      `opened ${file.name} · ${plural(r.tracks.length, 'track')}, ${plural(r.bars, 'bar')} at ${r.bpm} bpm${notes.map((n) => ` · ${n}`).join('')}`,
+      r.dropped > 0 || r.fileBars > r.bars,
+    );
   } catch (err) {
     status(`couldn't open ${file.name}: ${err.message ?? err}`, true);
   }
@@ -805,7 +837,7 @@ async function openDemo({ file, name, code: src }) {
 fileBtn.addEventListener('click', () =>
   menu(fileBtn, [
     { label: 'open saved…', run: () => openSaved(fileBtn) },
-    { label: 'open file…  (.js or .zip)', run: async () => {
+    { label: 'open file…  (.js, .zip, .mid)', run: async () => {
       const f = await pickFile();
       if (f) openTuneFile(f);
     } },
