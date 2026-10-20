@@ -245,7 +245,7 @@ stack(
   snare,
   hats,
 )</pre>
-  <div class="note"><b>In the app:</b> click the sound name under a track to search every sound and hear it before you pick. The <b>kit</b> menu at the top switches every drum track to another machine at once.</div>
+  <div class="note"><b>In the app:</b> click a track's sound name to search every sound and hear it before you pick. The <b>kit</b> menu at the top switches every drum track to another machine at once.</div>
   <p><b>Your own sounds:</b> <b>+ samples → a sounds folder…</b> imports a folder of audio files, the same way strudel.cc's "import sounds folder" does. Each subfolder becomes a sound named after it, and its files are its variations, numbered from 0 in alphabetical order:</p>
 <pre class="note">samples/
   swoop/   swooplong.wav  swoopshort.wav  swooptight.wav   →  s("swoop:0") … s("swoop:2")
@@ -362,7 +362,7 @@ const song = arrange(
 )
 
 song</pre>
-  <div class="note"><b>In the app:</b> the bar pager above the grid adds bars and copies them; <b>+ scene</b> saves the tracks playing now as a scene; the song row strings scenes together, and the <b>loop / song</b> switch picks what plays.</div>
+  <div class="note"><b>In the app:</b> the bar pager above the grid adds bars and copies them; <b>+ scene</b> saves the tracks playing now as a scene; the song row strings scenes together, and the <b>loop / song</b> switch picks what plays. On a phone, these are in the <b>song</b> view.</div>
   <p class="docs">Full docs: <a href="https://strudel.cc/learn/time-modifiers/" target="_blank" rel="noopener">time and structure ↗</a></p>
 </section>
 
@@ -374,7 +374,9 @@ song</pre>
     <li><b>export → code</b> downloads the tune as a <code>.js</code> file. It's plain Strudel, so it also runs on <a href="https://strudel.cc" target="_blank" rel="noopener">strudel.cc</a>, or use <b>open in strudel</b> above the code.</li>
     <li><b>export → mix</b> renders a WAV, and <b>stems</b> renders one WAV per track (zipped) for a DAW, both faster than real time.</li>
     <li><b>● rec</b> records what you play live, scene changes and all.</li>
+    <li><b>open file…</b> in the file menu (or dropping a file on the page) opens a <code>.js</code> tune, a <code>.zip</code> with its samples, or a <b>MIDI file</b>: its drums and parts become tracks on the grid, chords split into one track per note.</li>
   </ul>
+  <p>On a phone, <b>export</b> and <b>● rec</b> are under <b>⋯</b> at the top.</p>
   <p>Everything stays in your browser: clearing site data clears it, so download anything you want to keep.</p>
 </section>
 
@@ -401,6 +403,7 @@ stack(
     <li><code>&lt;0 2 4 7&gt;</code> takes a different note each bar, and <code>.scale("C3:minor")</code> turns the numbers into notes of a scale.</li>
     <li><code>.jux(rev)</code> plays the pattern backwards in the right ear.</li>
   </ul>
+  <p>Visuals too: put <code>await initHydra()</code> at the top of the code and <a href="https://strudel.cc/learn/hydra/" target="_blank" rel="noopener">Hydra</a> draws behind the code panel, its numbers following the music with <code>H("…")</code>.</p>
   <p>From here, Strudel's own <a href="https://strudel.cc/workshop/getting-started/" target="_blank" rel="noopener">workshop</a> and <a href="https://strudel.cc/learn/" target="_blank" rel="noopener">reference</a> go much further. Everything there works in StrudelUI's code panel.</p>
 </section>
 

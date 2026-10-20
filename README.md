@@ -11,7 +11,8 @@ A PXLPSHR project.
 
 ## What it does
 
-- **Grid + live code:** 16-step rows per track next to the real Strudel editor; edit either side.
+- **Grid + live code:** 16-step rows per track, the real Strudel editor below them (or beside them, in
+  settings); edit either one.
   Tracks written in free code still show their steps, read from the playing pattern.
 - **Sounds:** search every sound Strudel knows and hear it before you pick. While playing, each sound you
   browse plays in the tune in place of the track's sound (pick to keep it, Esc to go back).
@@ -22,6 +23,10 @@ A PXLPSHR project.
 - **Tracks:** add drum / bass / chord / code / sample tracks, rename, duplicate, reorder, delete.
   Per-track effects: pump, delay, distort, crush, coarse, phaser, low cut, pan, stereo, swing.
 - **Mixer:** three slider columns per track (gain, high cut, space by default; click a heading to choose).
+  On tablets, car screens and narrow windows they move to a mixer under the scenes.
+- **Phones:** the grid, the song (scenes, song, mixer) and the code are views of their own, switched at
+  the bottom; the rest of the header is under **⋯**, and a track's **⋯** has its sliders, length and
+  effects. Tap a step to set it or drag along a row to paint; a swipe up or down scrolls.
 - **Settings:** theme (the default, or strudel.cc's own colours), layout (code below the sequencer, the
   default, or beside it), audio output device (Chrome and Edge), code font size, code helpers
   (autocomplete with docs, docs on ctrl+hover, bracket matching, line wrapping) and editor keys
@@ -39,6 +44,8 @@ A PXLPSHR project.
   sound on the kit you have picked, other parts note tracks on Strudel's General MIDI sounds (`gm_…`), and
   a chord part a few tracks, one per voice (up to 4). Notes move to the nearest 16th; velocity, pitch bends
   and tempo changes aren't kept, and the grid holds the first 16 bars. The status line says what changed.
+- **Hydra visuals:** `await initHydra()` in the code draws [Hydra](https://strudel.cc/learn/hydra/) behind
+  the code panel, not over the app. It stops when the code no longer starts it, or another tune opens.
 - **Demos:** file → demos… opens **stab - pxlpshr** (the tune a first visit opens) and the tunes in `demos/`.
   **visuals demo** uses every visual Strudel draws inside the code: `_scope`, `_punchcard`, `_spiral`,
   `_pianoroll`, `_pitchwheel`, `_spectrum` and `markcss`.
@@ -58,15 +65,15 @@ The **?** under the grid lists the main ones in the app.
 | cmd/ctrl + s | save |
 | cmd/ctrl + z, shift + cmd/ctrl + z or cmd/ctrl + y | undo, redo |
 | ctrl + enter (in the editor) | apply typed code |
-| click or drag on steps | set steps |
+| click or drag on steps | set steps (touch: tap, or drag along the row; a swipe up or down scrolls) |
 | right-click a note step, or scroll / ↑↓ on it | pick or nudge the note (long-press on a phone) |
 | [ ] | previous / next bar |
 | click a bar, then click it again | stay on that bar while it plays, then follow the playhead again |
 | cmd/ctrl + c, v (outside the editor) | copy / paste a bar |
 | click a sound, ←→ on it | change it, step through its variations |
 | right-click a sound | trim it (long-press on a phone) |
-| right-click a track name | its effects |
-| drag a name, or ↑↓ on it | reorder tracks |
+| right-click a track name | its effects (on a phone: its **⋯** → effects) |
+| drag a name (touch: its ⠿), or ↑↓ on it | reorder tracks |
 | double-click a name | rename |
 | double-click a slider | remove that setting from the code |
 | click a slider column's heading | choose what the column shows (kept in this browser) |
@@ -107,8 +114,8 @@ It's static files, no build. Serve the folder (ES modules don't load from `file:
 npm start
 ```
 
-(that's `python3 -m http.server 5173`), then open http://localhost:5173. Made and tested in Chromium browsers; Firefox and Safari should work
-but aren't regularly tested.
+(that's `python3 -m http.server 5173`), then open http://localhost:5173. Made in Chromium browsers and
+tested there and in Safari on iPhone; Firefox and desktop Safari should work but aren't regularly tested.
 
 To put it online, any static host works (all paths are relative).
 
@@ -144,8 +151,9 @@ Sounds load from Strudel's sample collections online, so it needs a connection.
 ## Tests
 
 ```bash
-npm test        # the code ↔ grid model, mapping files, trim, zips (Node 22+)
-npm run smoke   # the app in headless Chrome: playback, edits, exports, demos, learn examples
+npm test        # the code ↔ grid model, MIDI files, mapping files, trim, zips (Node 22+)
+npm run smoke   # the app in headless Chrome: playback, edits, exports, demos, MIDI, Hydra,
+                #   tablet and phone layouts, learn examples
 ```
 
 Both run on every push.
@@ -170,9 +178,9 @@ A weekly GitHub Action opens a pull request when a newer release is out; merge i
 | `app.js` | the grid, mixer, scenes/song, file menu |
 | `sounds.js`, `picker.js` | sound catalog, preview, your samples |
 | `trim.js` | the trim panel: waveform, start / end handles |
-| `popover.js` | the floating panels and menus |
+| `popover.js` | the floating panels and menus (bottom sheets on phones) |
 | `settings.js` | the settings panel: theme, layout, audio output, code font size, helpers, keys |
-| `theme.css`, `theme.js` | the strudel theme's colours; applying the saved theme before first paint |
+| `theme.css`, `theme.js` | the strudel theme's colours; applying the saved theme and layout before first paint |
 | `controllers.js` | MIDI and keyboard mapping (map mode, mappings file) |
 | `export.js`, `render.html`, `render.js` | mix/stem export (rendered in a throwaway frame) and live recording |
 | `files.js` | saved tunes, opening `.js` / `.strudel` / `.zip` tune files |
@@ -181,7 +189,7 @@ A weekly GitHub Action opens a pull request when a newer release is out; merge i
 | `default.js` | the tune a first visit opens |
 | `demos/` | the tunes in file → demos… (add one to `DEMOS` in `app.js`) |
 | `learn.html`, `learn.js` | the learn page: lessons with playable examples |
-| `test/` | tests for `code.js`, `controllers.js`, `trim.js` and `zip.js`; `fixtures/`: tune files they read |
+| `test/` | tests for `code.js`, `controllers.js`, `midi.js`, `trim.js` and `zip.js`; `fixtures/`: tune files they read |
 | `scripts/` | the browser smoke test and the Strudel update script |
 | `.github/workflows/` | the tests on every push; the weekly Strudel update pull request |
 | `docs/` | the screenshot |
